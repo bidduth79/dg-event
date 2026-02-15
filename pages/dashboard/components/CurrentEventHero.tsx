@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { DomainEvent } from '../../../events/domain/Event';
 import { formatTime } from '../../../core/time/timeUtils';
 import { useSettings } from '../../../state/SettingsContext';
@@ -17,12 +17,43 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
   ongoingEvent, 
   nextEvent,
   remainingTime, 
-  isCritical, 
+  isCritical, // Note: We will calculate precise timing locally for the 60s rule
   onExtend,
   onFinish,
   readOnly
 }) => {
   const { blinkEnabled } = useSettings();
+  
+  // Dropdown State
+  const [isDropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            setDropdownOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // --- TIME CALCULATION FOR STYLING ---
+  // We calculate this on every render (triggered by parent's remainingTime update)
+  const timeStatus = useMemo(() => {
+    if (!ongoingEvent) return 'idle';
+
+    const now = new Date().getTime();
+    const end = new Date(ongoingEvent.endAt).getTime();
+    const diffMs = end - now;
+    const diffSec = diffMs / 1000;
+
+    if (diffSec <= 0) return 'expired';
+    if (diffSec <= 30) return 'danger'; // Last 30 seconds (Red)
+    if (diffSec <= 60) return 'warning'; // 60s to 30s (Yellow)
+    return 'normal';
+  }, [ongoingEvent, remainingTime]); // Depend on remainingTime to force update
 
   // --- PROGRESS BAR LOGIC ---
   const progressPercentage = useMemo(() => {
@@ -33,31 +64,70 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
     const totalDuration = end - start;
     const elapsed = now - start;
     
-    // Calculate percentage (0 to 100)
     let percent = (elapsed / totalDuration) * 100;
     if (percent < 0) percent = 0;
     if (percent > 100) percent = 100;
     
     return percent;
-  }, [ongoingEvent, remainingTime]); // Depend on remainingTime to update every second
+  }, [ongoingEvent, remainingTime]);
 
   // Background Styles (Inner fill)
   const getHeroBackground = () => {
      if (!ongoingEvent) return 'bg-gray-900/30';
-     if (isCritical) return `bg-red-900 shadow-[0_0_30px_rgba(239,68,68,0.4)] ${blinkEnabled ? 'animate-pulse' : ''}`;
-     return 'bg-green-900/20';
+     
+     // Animation class
+     const pulseClass = blinkEnabled ? 'animate-pulse' : '';
+
+     switch (timeStatus) {
+        case 'expired':
+            // Solid Red for expired
+            return `bg-red-900 shadow-[0_0_30px_rgba(239,68,68,0.4)] ${pulseClass}`;
+        case 'danger':
+            // Red Blink (0-30s)
+            return `bg-red-900/80 shadow-[0_0_30px_rgba(239,68,68,0.4)] ${pulseClass}`;
+        case 'warning':
+            // Yellow Blink (30-60s)
+            return `bg-yellow-900/60 shadow-[0_0_30px_rgba(234,179,8,0.4)] ${pulseClass}`;
+        default:
+            // Normal Green
+            return 'bg-green-900/20';
+     }
   };
 
   const getHeroTextStyles = () => {
     if (!ongoingEvent) return 'text-gray-400';
-    if (isCritical) return 'text-white';
-    return 'text-green-400';
+    
+    switch (timeStatus) {
+        case 'expired':
+        case 'danger':
+            return 'text-white'; // White text on red background
+        case 'warning':
+            return 'text-yellow-200'; // Light yellow text on yellow background
+        default:
+            return 'text-green-400';
+    }
   };
 
   // Border Color based on status
   const getBorderColor = () => {
-    if (isCritical) return '#EF4444'; // Red-500
-    return '#22C55E'; // Green-500
+    switch (timeStatus) {
+        case 'expired':
+        case 'danger':
+            return '#EF4444'; // Red-500
+        case 'warning':
+            return '#EAB308'; // Yellow-500
+        default:
+            return '#22C55E'; // Green-500
+    }
+  };
+
+  // Status Label Dot Color
+  const getStatusDotClass = () => {
+      if (blinkEnabled) {
+          if (timeStatus === 'danger' || timeStatus === 'expired') return 'bg-red-500 animate-pulse';
+          if (timeStatus === 'warning') return 'bg-yellow-500 animate-pulse';
+      }
+      return 'bg-green-500';
   };
 
   return (
@@ -68,8 +138,11 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
         {/* Left: Label */}
         <div className="flex items-center justify-between">
            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-              {ongoingEvent && <span className={`w-3 h-3 rounded-full ${isCritical ? 'bg-red-500' : 'bg-green-500'} animate-pulse`}></span>}
-              {ongoingEvent ? (isCritical ? 'Critical Event' : 'Current Event') : 'Status'}
+              {ongoingEvent && <span className={`w-3 h-3 rounded-full ${getStatusDotClass()}`}></span>}
+              {ongoingEvent ? (
+                  timeStatus === 'danger' || timeStatus === 'expired' ? 'Critical Event' : 
+                  timeStatus === 'warning' ? 'Ending Soon' : 'Current Event'
+              ) : 'Status'}
            </h2>
            
            {/* Mobile-only Buttons */}
@@ -81,21 +154,42 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
                 >
                   End
                 </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onExtend(5); }}
-                  className="bg-gray-800 hover:bg-gray-700 text-white text-[10px] font-bold py-1.5 px-2.5 rounded border border-gray-600 flex items-center gap-1"
-                >
-                  +5m
-                </button>
+                
+                {/* Mobile Dropdown */}
+                <div className="relative" ref={dropdownRef}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setDropdownOpen(!isDropdownOpen); }}
+                      className="bg-gray-800 hover:bg-gray-700 text-white text-[10px] font-bold py-1.5 px-2.5 rounded border border-gray-600 flex items-center gap-1"
+                    >
+                      Extend
+                      <svg className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {isDropdownOpen && (
+                        <div className="absolute top-full mt-1 right-0 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 flex flex-col min-w-[100px] overflow-hidden">
+                           {[2, 3, 5].map(min => (
+                             <button
+                                key={min}
+                                onClick={(e) => { e.stopPropagation(); onExtend(min); setDropdownOpen(false); }}
+                                className="px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800 border-b border-gray-800 last:border-0"
+                             >
+                                +{min} Min
+                             </button>
+                           ))}
+                        </div>
+                    )}
+                </div>
              </div>
            )}
         </div>
 
         {/* Right: Timer & Desktop Buttons */}
         <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-4">
-             {/* Timer Display (Restored to top right) */}
+             {/* Timer Display */}
              {ongoingEvent && remainingTime && (
-                <div className={`font-mono text-3xl md:text-4xl font-bold ${isCritical ? 'text-red-500' : 'text-blue-400'}`}>
+                <div className={`font-mono text-3xl md:text-4xl font-bold ${
+                    timeStatus === 'danger' || timeStatus === 'expired' ? 'text-red-500' : 
+                    timeStatus === 'warning' ? 'text-yellow-500' : 'text-blue-400'
+                }`}>
                   {remainingTime}
                 </div>
              )}
@@ -111,21 +205,38 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
                     End Now
                   </button>
 
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); onExtend(5); }}
-                    className="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold py-1.5 px-3 rounded border border-gray-600 transition-colors flex items-center gap-1"
-                    title="Extend event by 5 minutes"
-                  >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    +5m
-                  </button>
+                  {/* Desktop Dropdown */}
+                  <div className="relative" ref={dropdownRef}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setDropdownOpen(!isDropdownOpen); }}
+                        className="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold py-1.5 px-3 rounded border border-gray-600 transition-colors flex items-center gap-1"
+                        title="Extend event duration"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                        Extend Time
+                        <svg className={`w-3 h-3 ml-1 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      
+                      {isDropdownOpen && (
+                          <div className="absolute top-full mt-2 right-0 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 flex flex-col min-w-[120px] overflow-hidden">
+                             {[2, 3, 5].map(min => (
+                               <button
+                                  key={min}
+                                  onClick={(e) => { e.stopPropagation(); onExtend(min); setDropdownOpen(false); }}
+                                  className="px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-800 border-b border-gray-800 last:border-0 hover:text-white transition-colors"
+                               >
+                                  +{min} Minutes
+                               </button>
+                             ))}
+                          </div>
+                      )}
+                  </div>
                 </div>
              )}
         </div>
       </div>
       
       {/* CARD CONTENT WITH BORDER PROGRESS */}
-      {/* Note: We remove the CSS 'border' and use the SVG for the visual border */}
       <div className={`flex-1 rounded-2xl relative flex flex-col justify-center overflow-hidden transition-all duration-300 ${getHeroBackground()}`}>
         
         {/* BORDER PROGRESS OVERLAY */}
@@ -136,9 +247,9 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
                x="2" y="2" 
                width="calc(100% - 4px)" 
                height="calc(100% - 4px)" 
-               rx="14" ry="14" // Matches rounded-2xl (approx 16px) minus stroke adjustment
+               rx="14" ry="14" 
                fill="none" 
-               stroke="rgba(75, 85, 99, 0.4)" // Gray-600 opacity 40
+               stroke="rgba(75, 85, 99, 0.4)" 
                strokeWidth="4"
              />
              
@@ -151,17 +262,13 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
                fill="none" 
                stroke={getBorderColor()} 
                strokeWidth="4"
-               pathLength="100" // Magic attribute that makes dasharray 0-100 works regardless of pixel size
+               pathLength="100" 
                strokeDasharray="100"
                strokeDashoffset={100 - progressPercentage}
                strokeLinecap="round"
                className="transition-all duration-1000 ease-linear"
-               style={{ transformOrigin: 'center', transform: 'rotate(-90deg) translateX(-100%)' }} // Start from top center (roughly) - Adjust depending on browser if needed, standard rect starts top-left
+               style={{ transformOrigin: 'center', transform: 'rotate(-90deg) translateX(-100%)' }} 
              />
-             {/* Note on Rect rotation: By default rect path starts top-left. 
-                 Visualizing 'time' usually feels better if it fills up. 
-                 Since it's a rectangle, standard dashoffset draws clockwise from start. 
-             */}
           </svg>
         ) : (
           /* Static border when no event */
@@ -171,11 +278,14 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
         {/* Background Icon Decoration */}
         {ongoingEvent && (
              <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none z-0">
-                <svg className={`w-48 h-48 md:w-64 md:h-64 ${isCritical ? 'text-white' : 'text-green-500'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5v-5z"></path></svg>
+                <svg className={`w-48 h-48 md:w-64 md:h-64 ${
+                    timeStatus === 'normal' ? 'text-green-500' : 
+                    timeStatus === 'warning' ? 'text-yellow-500' : 'text-white'
+                }`} fill="currentColor" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5v-5z"></path></svg>
              </div>
         )}
              
-        {/* Content - Increased padding to avoid overlapping the thick border */}
+        {/* Content */}
         <div className="relative z-10 p-6 md:p-8 w-full m-auto">
             {ongoingEvent ? (
               <div>
@@ -188,7 +298,10 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
                </h1>
                
                {ongoingEvent.location && (
-                 <div className={`flex items-center text-lg md:text-2xl mt-2 md:mt-4 ${isCritical ? 'text-red-200' : 'text-gray-300'}`}>
+                 <div className={`flex items-center text-lg md:text-2xl mt-2 md:mt-4 ${
+                    timeStatus === 'warning' ? 'text-yellow-200' :
+                    timeStatus === 'danger' || timeStatus === 'expired' ? 'text-red-200' : 'text-gray-300'
+                 }`}>
                    <svg className="w-5 h-5 md:w-8 md:h-8 mr-2 md:mr-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />

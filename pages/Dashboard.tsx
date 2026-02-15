@@ -73,7 +73,7 @@ const Dashboard: React.FC = () => {
   // 3. Timing & Clock Hook
   const { currentTime, remainingTime, isCritical } = useEventTiming(localEvents);
 
-  // 4. Handle Extend Logic (Unconditional Shift)
+  // 4. Handle Extend Logic (Smart Shift)
   const handleExtendEvent = useCallback((minutes: number) => {
     if (isReadOnly) return;
     const now = new Date().getTime();
@@ -98,20 +98,35 @@ const Dashboard: React.FC = () => {
       // Update Active Event
       newEvents[activeIndex] = { ...activeEvent, endAt: new Date(newEnd).toISOString() };
 
-      // Update ALL subsequent events unconditionally
+      // Update subsequent events ONLY if they overlap (Chain Reaction)
+      let currentBoundary = newEnd;
+
       for (let i = activeIndex + 1; i < newEvents.length; i++) {
         const currentEvent = newEvents[i];
         const oldStart = new Date(currentEvent.startAt).getTime();
-        const oldEvtEnd = new Date(currentEvent.endAt).getTime();
-
-        const newStart = oldStart + shiftAmount;
-        const newEvtEnd = oldEvtEnd + shiftAmount;
-
-        newEvents[i] = { 
-            ...currentEvent, 
-            startAt: new Date(newStart).toISOString(), 
-            endAt: new Date(newEvtEnd).toISOString() 
-        };
+        
+        // If the current event starts BEFORE the previous event ends (overlap)
+        // We push it to start at the previous event's end time.
+        if (oldStart < currentBoundary) {
+            const oldEvtEnd = new Date(currentEvent.endAt).getTime();
+            const duration = oldEvtEnd - oldStart;
+            
+            const newStart = currentBoundary;
+            const newEvtEnd = newStart + duration;
+            
+            newEvents[i] = { 
+                ...currentEvent, 
+                startAt: new Date(newStart).toISOString(), 
+                endAt: new Date(newEvtEnd).toISOString() 
+            };
+            
+            // Update boundary for the next iteration
+            currentBoundary = newEvtEnd;
+        } else {
+            // No overlap found, so the chain breaks here. 
+            // Subsequent events are already safe.
+            break;
+        }
       }
       return newEvents;
     });
