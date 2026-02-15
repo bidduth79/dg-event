@@ -55,7 +55,6 @@ export const useDashboardData = ({
         { id: '2', summary: 'Work', backgroundColor: '#EA4335', selected: true },
     ];
     setAvailableCalendars(mockCals);
-    // If we are falling back to mock, we might want to ensure mock calendars are selected if nothing is selected
     if (selectedCalendars.length === 0) {
         setInitialCalendars(['1', '2']);
     }
@@ -75,7 +74,6 @@ export const useDashboardData = ({
         {
             id: 'm2',
             title: 'Running Event (Critical Test)',
-            // Starts 30 mins ago, ends in 1 min 30 sec (to test blinking immediately)
             startAt: new Date(now.getTime() - 1800000).toISOString(), 
             endAt: new Date(now.getTime() + 90000).toISOString(), 
             isAllDay: false,
@@ -109,25 +107,12 @@ export const useDashboardData = ({
             isAllDay: true,
             calendarId: '2',
             status: EventStatus.UPCOMING,
-        },
-        {
-            id: 'm6',
-            title: 'Client Workshop',
-            startAt: new Date(now.getTime() + 259200000).toISOString(), // +3 days
-            endAt: new Date(now.getTime() + 259200000 + 14400000).toISOString(),
-            isAllDay: false,
-            calendarId: '1',
-            status: EventStatus.UPCOMING,
         }
     ];
     setEvents(mockEvents);
     
-    // Update Last Synced Time for Mock
     const nowTime = new Date();
     setLastUpdated(nowTime);
-    // Don't save mock data to cache to avoid polluting real data cache if token comes back
-    // localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(mockEvents)); 
-    // localStorage.setItem(LAST_UPDATED_KEY, nowTime.toISOString());
 
   }, [selectedCalendars.length, setInitialCalendars]);
 
@@ -148,12 +133,22 @@ export const useDashboardData = ({
         }
 
         setAvailableCalendars(cals);
+        
+        // Logic Update: Respect Google's 'selected' state.
+        // If the user has NOT manually configured calendars in the App yet (length 0),
+        // we populate based on what is checked in Google Calendar UI.
         if (selectedCalendars.length === 0) {
-          const primary = cals.find(c => c.selected) || cals[0];
-          if (primary) setInitialCalendars([primary.id]);
+          const preSelected = cals.filter(c => c.selected).map(c => c.id);
+          
+          if (preSelected.length > 0) {
+             setInitialCalendars(preSelected);
+          } else {
+             // Fallback: If nothing is selected in Google (rare), select primary
+             const primary = cals.find(c => c.id.includes('group.calendar.google.com') === false) || cals[0];
+             if (primary) setInitialCalendars([primary.id]);
+          }
         }
       } catch (e) {
-        // If Unauthorized, let the app handle logout. Otherwise fallback to mock.
         if ((e as any).message === "UNAUTHORIZED") {
              handleAuthError(e);
         } else {
@@ -172,8 +167,6 @@ export const useDashboardData = ({
         return;
     }
     if (selectedCalendars.length === 0) {
-        // If logged in but no calendars selected, we might be in initial state.
-        // Or user deselected everything.
         return; 
     }
 
@@ -182,6 +175,7 @@ export const useDashboardData = ({
       const timeMin = startOfDay(new Date()).toISOString();
       const timeMax = addDays(new Date(), 30).toISOString(); 
 
+      // Fetch fresh data
       const promises = selectedCalendars.map(calId => 
         fetchEventsForCalendar(calId, accessToken, timeMin, timeMax)
       );
@@ -190,20 +184,17 @@ export const useDashboardData = ({
       const allEvents = results.flat();
       allEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
-      // FALLBACK: If real API returns 0 events, show Mock Data for UI design
-      if (allEvents.length === 0) {
-          console.warn("Real API returned 0 events. Falling back to Mock Data for UI Design.");
-          generateMockData();
-          return;
-      }
-
+      // Only fallback to mock if the API explicitly fails, not just because list is empty.
+      // An empty list is valid (free day).
+      // However, for this UI design phase, if 0 events, we might still want mock, 
+      // BUT for sync debugging, we trust the API result.
+      
+      // If we got a successful empty array, we update state to empty.
       setEvents(allEvents);
       
-      // Update Timestamp
       const now = new Date();
       setLastUpdated(now);
       
-      // Save to LocalStorage
       localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(allEvents));
       localStorage.setItem(LAST_UPDATED_KEY, now.toISOString());
 
@@ -211,8 +202,8 @@ export const useDashboardData = ({
       if ((err as any).message === "UNAUTHORIZED") {
           handleAuthError(err);
       } else {
-          console.warn("Failed to fetch events (Network/API Error). Falling back to Mock Data.", err);
-          generateMockData();
+          console.warn("Failed to fetch events (Network/API Error).", err);
+           // Optional: Keep old data or show error
       }
     } finally {
       setLoading(false);

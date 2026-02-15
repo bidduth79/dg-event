@@ -8,12 +8,17 @@ export const fetchEventsForCalendar = async (
   timeMin: string,
   timeMax: string
 ): Promise<DomainEvent[]> => {
+  // Add a random timestamp to prevent browser caching of the GET request
+  const cacheBuster = new Date().getTime();
+
   const params = new URLSearchParams({
     timeMin,
     timeMax,
     singleEvents: 'true',
     orderBy: 'startTime',
-    maxResults: '250', // Limit to prevent overload
+    maxResults: '250',
+    timeZone: APP_CONFIG.DEFAULT_TIMEZONE, // Explicitly request data in app's timezone
+    _: cacheBuster.toString() // Cache buster param
   });
 
   try {
@@ -21,6 +26,8 @@ export const fetchEventsForCalendar = async (
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Cache-Control': 'no-cache', // Hint to server/proxy
+        'Pragma': 'no-cache'
       },
     });
 
@@ -29,7 +36,6 @@ export const fetchEventsForCalendar = async (
     }
 
     if (!response.ok) {
-      // Handle specific error for deleted/inaccessible calendars gracefully
       if (response.status === 404 || response.status === 410) {
         return [];
       }
@@ -49,9 +55,9 @@ export const fetchEventsForCalendar = async (
     return domainEvents;
   } catch (error: any) {
     if (error.message === "UNAUTHORIZED") {
-      throw error; // Re-throw to be caught by the caller for logout
+      throw error;
     }
     console.error(`API Error (fetchEvents for ${calendarId}):`, error);
-    return []; // Return empty on other errors to allow Promise.all to continue
+    return [];
   }
 };
