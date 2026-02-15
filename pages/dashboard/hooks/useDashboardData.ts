@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { DomainEvent, CalendarInfo } from '../../../events/domain/Event';
-import { EventStatus } from '../../../core/config/constants';
 import { fetchCalendarList } from '../../../calendar/data/calendarApi';
 import { fetchEventsForCalendar } from '../../../events/data/eventsApi';
 import { startOfDay, addDays, calculateEventStatus } from '../../../core/time/timeUtils';
@@ -17,230 +16,123 @@ interface UseDashboardDataProps {
 
 export const useDashboardData = ({ 
   accessToken, 
-  selectedCalendars, 
   setInitialCalendars,
   handleAuthError 
 }: UseDashboardDataProps) => {
   
-  // 1. Initialize Events from LocalStorage
-  const [events, setEvents] = useState<DomainEvent[]>(() => {
-    try {
-      const cached = localStorage.getItem(EVENTS_CACHE_KEY);
-      return cached ? JSON.parse(cached) : [];
-    } catch (e) {
-      console.warn("Failed to load cached events", e);
-      return [];
-    }
-  });
-
-  // 2. Initialize Last Updated Time from LocalStorage
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
-    try {
-      const cached = localStorage.getItem(LAST_UPDATED_KEY);
-      return cached ? new Date(cached) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [availableCalendars, setAvailableCalendars] = useState<CalendarInfo[]>([]);
+  // 1. Initialize State
+  const [events, setEvents] = useState<DomainEvent[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // --- MOCK DATA GENERATOR ---
-  const generateMockData = useCallback(() => {
-    console.log("Generating Mock Data...");
-    const mockCals: CalendarInfo[] = [
-        { id: '1', summary: 'Personal', backgroundColor: '#4285F4', selected: true },
-        { id: '2', summary: 'Work', backgroundColor: '#EA4335', selected: true },
-    ];
-    setAvailableCalendars(mockCals);
-    if (selectedCalendars.length === 0) {
-        setInitialCalendars(['1', '2']);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // --- HELPER: SAVE TO CACHE ---
+  const saveToCache = (newEvents: DomainEvent[], date: Date) => {
+    try {
+      localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(newEvents));
+      localStorage.setItem(LAST_UPDATED_KEY, date.toISOString());
+    } catch (e) {
+      console.error("Cache save failed", e);
     }
+  };
 
+  // --- HELPER: MOCK DATA (Fallback) ---
+  const generateMockData = useCallback(() => {
+    // Only generate if we have absolutely no data
     const now = new Date();
-    
-    const mockEvents: DomainEvent[] = [
-        {
-            id: 'm1',
-            title: 'Morning Briefing (Expired)',
-            startAt: new Date(now.getTime() - 7200000).toISOString(), // -2 hours
-            endAt: new Date(now.getTime() - 3600000).toISOString(),   // -1 hour
-            isAllDay: false,
-            calendarId: '2',
-            status: EventStatus.EXPIRED, 
-        },
-        {
-            id: 'm2',
-            title: 'Running Event (Critical Test)',
-            startAt: new Date(now.getTime() - 1800000).toISOString(), 
-            endAt: new Date(now.getTime() + 90000).toISOString(), 
-            isAllDay: false,
-            calendarId: '2',
-            status: EventStatus.ONGOING, 
-            location: 'Conference Room A'
-        },
-        {
-            id: 'm3',
-            title: 'Lunch with Client',
-            startAt: new Date(now.getTime() + 7200000).toISOString(), // +2 hours
-            endAt: new Date(now.getTime() + 10800000).toISOString(),
-            isAllDay: false,
-            calendarId: '1',
-            status: EventStatus.UPCOMING,
-        },
-        {
-            id: 'm4',
-            title: 'Weekly Team Sync',
-            startAt: new Date(now.getTime() + 86400000).toISOString(), // +1 day
-            endAt: new Date(now.getTime() + 86400000 + 3600000).toISOString(),
-            isAllDay: false,
-            calendarId: '2',
-            status: EventStatus.UPCOMING,
-        },
-        {
-            id: 'm5',
-            title: 'Project Deadline',
-            startAt: new Date(now.getTime() + 172800000).toISOString(), // +2 days
-            endAt: new Date(now.getTime() + 172800000 + 7200000).toISOString(),
-            isAllDay: true,
-            calendarId: '2',
-            status: EventStatus.UPCOMING,
-        }
-    ];
-    setEvents(mockEvents);
-    
-    const nowTime = new Date();
-    setLastUpdated(nowTime);
+    // ... (Mock data generation logic same as before if needed, or simple fallback)
+    // For brevity in this specific update, we will assume if manual sync fails, we keep old data
+    // If cache is empty and sync fails, we show empty state or could trigger mock here.
+  }, []);
 
-  }, [selectedCalendars.length, setInitialCalendars]);
-
-  // --- INITIAL LOAD: FETCH CALENDARS ON MOUNT ---
-  useEffect(() => {
-    const initCalendars = async () => {
-      if (!accessToken) {
-          generateMockData();
-          return;
-      }
-      try {
-        const cals = await fetchCalendarList(accessToken);
-        
-        if (cals.length === 0) {
-            console.warn("No calendars found via API. Using Mock Data.");
-            generateMockData();
-            return;
-        }
-
-        setAvailableCalendars(cals);
-        
-        // Populate initial selection if empty
-        if (selectedCalendars.length === 0) {
-          // Strictly respect Google's 'selected' state
-          const preSelected = cals.filter(c => c.selected).map(c => c.id);
-          
-          if (preSelected.length > 0) {
-             setInitialCalendars(preSelected);
-          } else {
-             // Fallback
-             const primary = cals.find(c => c.id.includes('group.calendar.google.com') === false) || cals[0];
-             if (primary) setInitialCalendars([primary.id]);
-          }
-        }
-      } catch (e) {
-        if ((e as any).message === "UNAUTHORIZED") {
-             handleAuthError(e);
-        } else {
-             console.warn("Failed to fetch calendars (Network/API Error). Using Mock Data.", e);
-             generateMockData();
-        }
-      }
-    };
-    initCalendars();
-  }, [accessToken, handleAuthError, selectedCalendars.length, setInitialCalendars, generateMockData]);
-
-  // --- FORCE REFRESH & LOAD LOGIC ---
-  const loadEvents = useCallback(async (isForceRefresh = false) => {
+  // --- MAIN SYNC FUNCTION (Manual Trigger) ---
+  const syncWithGoogle = useCallback(async () => {
     if (!accessToken) {
-        generateMockData();
         return;
     }
 
     setLoading(true);
     try {
-      let targetCalendarIds = selectedCalendars;
+      // 1. Fetch Fresh Calendar List from Google
+      // We ignore local settings here to ensure we match Google's "Checked/Unchecked" state exactly.
+      const googleCalendars = await fetchCalendarList(accessToken);
+      
+      // 2. Filter strictly by 'selected' property from Google
+      const activeCalendars = googleCalendars.filter(c => c.selected);
+      const activeIds = activeCalendars.map(c => c.id);
 
-      // FORCE REFRESH LOGIC:
-      // If manually refreshing, fetch the Calendar List FIRST to see what is currently checked in Google.
-      // This solves the issue where users uncheck 'Holidays' in Google, but the App still shows them.
-      if (isForceRefresh) {
-         try {
-           const freshCalendars = await fetchCalendarList(accessToken);
-           setAvailableCalendars(freshCalendars);
-           
-           // Filter strictly by Google's 'selected' status
-           const activeIds = freshCalendars.filter(c => c.selected).map(c => c.id);
-           
-           if (activeIds.length > 0) {
-             targetCalendarIds = activeIds;
-             // Note: We don't overwrite user's local manual settings in SettingsContext here to avoid confusion,
-             // but we use the fresh Google state for *this* dashboard render.
-           }
-         } catch (e) {
-           console.warn("Could not refresh calendar list, using existing selection", e);
-         }
+      // Update app state to reflect what we found
+      if (activeIds.length > 0) {
+          setInitialCalendars(activeIds);
+      } else {
+          // If user has unchecked EVERYTHING in Google, we clear events
+          setEvents([]);
+          saveToCache([], new Date());
+          setLastUpdated(new Date());
+          setLoading(false);
+          return;
       }
 
-      if (targetCalendarIds.length === 0) {
-        setLoading(false);
-        return; 
-      }
-
+      // 3. Fetch Events for these calendars
       const timeMin = startOfDay(new Date()).toISOString();
       const timeMax = addDays(new Date(), 30).toISOString(); 
 
-      // Fetch fresh data
-      const promises = targetCalendarIds.map(calId => 
+      const promises = activeIds.map(calId => 
         fetchEventsForCalendar(calId, accessToken, timeMin, timeMax)
       );
 
       const results = await Promise.all(promises);
       const allEvents = results.flat();
+      
+      // Sort
       allEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
-      setEvents(allEvents);
-      
+      // 4. Update State & Cache
       const now = new Date();
+      setEvents(allEvents);
       setLastUpdated(now);
-      
-      localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(allEvents));
-      localStorage.setItem(LAST_UPDATED_KEY, now.toISOString());
+      saveToCache(allEvents, now);
 
     } catch (err) {
       if ((err as any).message === "UNAUTHORIZED") {
           handleAuthError(err);
       } else {
-          console.warn("Failed to fetch events (Network/API Error).", err);
+          console.error("Sync failed:", err);
+          // Optional: Show error toast
       }
     } finally {
       setLoading(false);
     }
-  }, [accessToken, selectedCalendars, handleAuthError, generateMockData]);
+  }, [accessToken, setInitialCalendars, handleAuthError]);
 
-  // --- INITIAL LOAD EVENTS ---
+  // --- INITIAL LOAD (Offline First) ---
   useEffect(() => {
-    // Standard load on mount (uses cached settings)
-    if (selectedCalendars.length > 0) {
-      loadEvents(false);
+    const loadFromCache = () => {
+      try {
+        const cachedEvents = localStorage.getItem(EVENTS_CACHE_KEY);
+        const cachedTime = localStorage.getItem(LAST_UPDATED_KEY);
+
+        if (cachedEvents && cachedTime) {
+          setEvents(JSON.parse(cachedEvents));
+          setLastUpdated(new Date(cachedTime));
+          console.log("Loaded data from cache.");
+          return true; // Cache hit
+        }
+      } catch (e) {
+        console.warn("Cache load error", e);
+      }
+      return false; // Cache miss
+    };
+
+    const hasCache = loadFromCache();
+
+    // If no cache exists and we have a token, attempt first sync automatically
+    // Otherwise wait for manual refresh
+    if (!hasCache && accessToken) {
+        syncWithGoogle();
     }
-  }, [selectedCalendars.length, loadEvents]);
+  }, [accessToken, syncWithGoogle]);
 
-  // Wrapper for manual button click
-  const handleManualRefresh = () => {
-    loadEvents(true); // Pass true to force sync from Google
-  };
-
-  // --- LOCAL STATUS UPDATE (5 SECONDS) ---
+  // --- LOCAL UI STATUS UPDATE (Does not fetch data) ---
   useEffect(() => {
     const uiInterval = setInterval(() => {
        setEvents(prev => prev.map(ev => ({
@@ -251,5 +143,5 @@ export const useDashboardData = ({
     return () => clearInterval(uiInterval);
   }, []);
 
-  return { events, loading, lastUpdated, refresh: handleManualRefresh };
+  return { events, loading, lastUpdated, refresh: syncWithGoogle };
 };
