@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { DomainEvent } from '../../../events/domain/Event';
-import { formatTime } from '../../../core/time/timeUtils';
+import { formatTime, formatDuration } from '../../../core/time/timeUtils';
 import { useSettings } from '../../../state/SettingsContext';
 
 interface CurrentEventHeroProps {
@@ -289,8 +289,11 @@ const CurrentEventHero: React.FC<CurrentEventHeroProps> = ({
         <div className="relative z-10 p-6 md:p-8 w-full m-auto">
             {ongoingEvent ? (
               <div>
-               <div className={`text-xl md:text-3xl font-medium mb-2 md:mb-3 ${getHeroTextStyles()}`}>
-                 {formatTime(ongoingEvent.startAt)} - {formatTime(ongoingEvent.endAt)}
+               <div className={`text-xl md:text-3xl font-medium mb-2 md:mb-3 flex items-center gap-3 ${getHeroTextStyles()}`}>
+                 <span>{formatTime(ongoingEvent.startAt)} - {formatTime(ongoingEvent.endAt)}</span>
+                 <span className="text-lg md:text-xl opacity-70 bg-black/20 px-2 py-0.5 rounded border border-white/10">
+                    {formatDuration(ongoingEvent.startAt, ongoingEvent.endAt)}
+                 </span>
                </div>
                
                <h1 className="text-4xl md:text-7xl font-bold text-white leading-tight mb-4 md:mb-6 line-clamp-3">

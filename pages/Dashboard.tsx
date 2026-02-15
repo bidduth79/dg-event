@@ -48,6 +48,7 @@ const Dashboard: React.FC = () => {
   const [localEvents, setLocalEvents] = useState<DomainEvent[]>([]);
 
   // Sync local events when initialEvents update
+  // CRITICAL FIX: Ensure pushed start times are preserved
   useEffect(() => {
     setLocalEvents(prevLocal => {
        if (prevLocal.length === 0) return initialEvents;
@@ -55,13 +56,20 @@ const Dashboard: React.FC = () => {
        return initialEvents.map(apiEvent => {
          const existingLocal = prevLocal.find(e => e.id === apiEvent.id);
          
-         if (existingLocal && new Date(existingLocal.endAt).getTime() > new Date(apiEvent.endAt).getTime()) {
-           return { ...apiEvent, endAt: existingLocal.endAt };
-         }
-         
-         if (existingLocal && new Date(existingLocal.endAt).getTime() < new Date(apiEvent.endAt).getTime()) {
-            if (new Date(existingLocal.endAt).getTime() < new Date().getTime()) {
-               return { ...apiEvent, endAt: existingLocal.endAt };
+         if (existingLocal) {
+            const apiStart = new Date(apiEvent.startAt).getTime();
+            const apiEnd = new Date(apiEvent.endAt).getTime();
+            const localStart = new Date(existingLocal.startAt).getTime();
+            const localEnd = new Date(existingLocal.endAt).getTime();
+
+            // If local state is "pushed" (start is later) or "extended" (end is later), keep local
+            // This prevents the visual overlap bug when API refreshes
+            if (localEnd > apiEnd || localStart > apiStart) {
+                return { 
+                    ...apiEvent, 
+                    startAt: existingLocal.startAt,
+                    endAt: existingLocal.endAt 
+                };
             }
          }
          

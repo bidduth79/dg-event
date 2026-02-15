@@ -1,6 +1,6 @@
 import React from 'react';
 import { DomainEvent } from '../../../events/domain/Event';
-import { formatTime, formatDate, isSameDay } from '../../../core/time/timeUtils';
+import { formatTime, formatDate, isSameDay, formatDuration } from '../../../core/time/timeUtils';
 
 interface UpcomingEventsListProps {
   events: DomainEvent[];
@@ -19,7 +19,7 @@ const UpcomingEventsList: React.FC<UpcomingEventsListProps> = ({ events }) => {
            events.map((event) => {
              const isToday = isSameDay(new Date(event.startAt), new Date());
              return (
-               <div key={event.id} className="bg-gray-900 border border-gray-800 p-5 rounded-xl flex items-center gap-6 hover:border-gray-700 transition-colors">
+               <div key={event.id} className="bg-gray-900 border border-gray-800 p-5 rounded-xl flex items-center gap-6 hover:border-gray-700 transition-colors group">
                   <div className="flex flex-col items-center justify-center w-28 flex-shrink-0 border-r border-gray-800 pr-4">
                      <span className="text-blue-400 font-bold text-lg md:text-xl text-center">
                        {event.isAllDay ? 'All Day' : formatTime(event.startAt)}
@@ -30,7 +30,14 @@ const UpcomingEventsList: React.FC<UpcomingEventsListProps> = ({ events }) => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                     <h3 className="text-2xl font-semibold text-gray-200 truncate">{event.title}</h3>
+                     <div className="flex items-center gap-3">
+                        <h3 className="text-2xl font-semibold text-gray-200 truncate">{event.title}</h3>
+                        {!event.isAllDay && (
+                          <span className="text-[10px] font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">
+                             {formatDuration(event.startAt, event.endAt)}
+                          </span>
+                        )}
+                     </div>
                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                         <span>Ends {formatTime(event.endAt)}</span>
                         {event.location && (

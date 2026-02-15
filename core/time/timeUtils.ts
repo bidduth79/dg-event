@@ -32,6 +32,27 @@ export const formatDate = (isoString: string | Date, timeZone: string = APP_CONF
   }
 };
 
+export const formatDuration = (startAt: string, endAt: string): string => {
+  try {
+    const start = new Date(startAt).getTime();
+    const end = new Date(endAt).getTime();
+    const diffMs = end - start;
+    
+    if (diffMs < 0) return '0m';
+
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+    return `${minutes}m`;
+  } catch (e) {
+    return '';
+  }
+};
+
 export const addDays = (date: Date, days: number): Date => {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
