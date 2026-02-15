@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { addDays } from '../core/time/timeUtils';
 import { db } from '../core/config/firebase';
-import { ref, onValue, set, update } from 'firebase/database';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 export type ViewMode = 'day' | 'week' | 'month' | 'year' | 'schedule' | '4days';
 export type UserRole = 'boss' | 'pa' | null;
+
+export interface EventOverride {
+  startAt?: string;
+  endAt?: string;
+}
 
 interface SettingsState {
   // SYNCED SETTINGS (Shared across devices via Firebase)
@@ -16,6 +21,7 @@ interface SettingsState {
   flashMessage: string;
   voiceEnabled: boolean;
   voiceURI: string;
+  eventOverrides: Record<string, EventOverride>; // Stores manual time changes
 
   // LOCAL SETTINGS (Device specific, stored in LocalStorage)
   userRole: UserRole;
@@ -37,6 +43,7 @@ interface SettingsContextType extends SettingsState {
   toggleSoundPA: () => void;
   toggleVoice: () => void;
   setVoiceURI: (uri: string) => void;
+  updateEventOverrides: (overrides: Record<string, EventOverride>) => void;
 }
 
 const defaultSyncedSettings = {
@@ -48,6 +55,7 @@ const defaultSyncedSettings = {
   flashMessage: '',
   voiceEnabled: false,
   voiceURI: '',
+  eventOverrides: {} as Record<string, EventOverride>,
 };
 
 const LOCAL_STORAGE_KEY = 'app_local_device_settings';
@@ -76,28 +84,31 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [localSettings]);
 
   // 2. SYNCED STATE (Content & View)
-  // We initialize with defaults, but Firebase will overwrite this instantly on mount
   const [syncedSettings, setSyncedSettings] = useState(defaultSyncedSettings);
   const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
 
+  // Firestore Document Reference: collection 'config', doc 'appSettings'
+  const settingsRef = doc(db, 'config', 'appSettings');
+
   // --- FIREBASE LISTENER ---
   useEffect(() => {
-    const settingsRef = ref(db, 'settings');
-    
-    const unsubscribe = onValue(settingsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
+    const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
         setSyncedSettings(prev => ({
           ...prev,
           ...data,
-          // Ensure array exists (Firebase doesn't store empty arrays)
-          selectedCalendars: data.selectedCalendars || []
+          // Ensure arrays/objects exist (Firebase sometimes omits empty ones)
+          selectedCalendars: data.selectedCalendars || [],
+          eventOverrides: data.eventOverrides || {}
         }));
       } else {
-        // If DB is empty, initialize it with defaults
-        set(settingsRef, defaultSyncedSettings);
+        // If doc doesn't exist, initialize it with defaults
+        setDoc(settingsRef, defaultSyncedSettings);
       }
       setIsFirebaseLoaded(true);
+    }, (error) => {
+        console.error("Firestore sync error:", error);
     });
 
     return () => unsubscribe();
@@ -106,7 +117,17 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   // --- ACTIONS (Write to Firebase for Synced, Write to State for Local) ---
 
   const updateFirebase = (updates: Partial<typeof defaultSyncedSettings>) => {
-    update(ref(db, 'settings'), updates).catch(err => console.error("Firebase update failed", err));
+    // Merge true ensures we update only specific fields without overwriting the whole doc
+    setDoc(settingsRef, updates, { merge: true }).catch(err => console.error("Firebase update failed", err));
+  };
+
+  const updateEventOverrides = (overrides: Record<string, EventOverride>) => {
+    // Merge new overrides with existing ones
+    const updatedOverrides = {
+        ...syncedSettings.eventOverrides,
+        ...overrides
+    };
+    updateFirebase({ eventOverrides: updatedOverrides });
   };
 
   const updateFlashMessage = (message: string) => {
@@ -126,7 +147,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const toggleVoice = () => {
-    // Explicitly cast to boolean to handle any potential undefined/null from partial DB states
+    // Explicitly cast to boolean to handle any potential undefined/null
     const currentValue = Boolean(syncedSettings.voiceEnabled);
     const newState = !currentValue;
     updateFirebase({ voiceEnabled: newState });
@@ -202,7 +223,6 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   // Combine Synced and Local state for the Consumer
-  // Use explicit defaults fallback to ensure 'voiceEnabled' is never undefined
   const combinedState: SettingsState = {
     ...localSettings,
     ...defaultSyncedSettings, 
@@ -226,7 +246,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       toggleSoundBoss,
       toggleSoundPA,
       toggleVoice,
-      setVoiceURI
+      setVoiceURI,
+      updateEventOverrides
     }}>
       {children}
     </SettingsContext.Provider>

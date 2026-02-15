@@ -1,11 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBwVaW1Av1w4ulft-vCXL4AKliO2Rg317o",
   authDomain: "event-for-dg.firebaseapp.com",
-  // The databaseURL is required for Realtime Database
-  databaseURL: "https://event-for-dg-default-rtdb.firebaseio.com",
   projectId: "event-for-dg",
   storageBucket: "event-for-dg.firebasestorage.app",
   messagingSenderId: "700124612380",
@@ -15,5 +13,5 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Realtime Database and export reference
-export const db = getDatabase(app);
+// Initialize Cloud Firestore and export reference
+export const db = getFirestore(app);

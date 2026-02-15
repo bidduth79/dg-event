@@ -1,6 +1,6 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { useSettings } from '../state/SettingsContext';
+import { useSettings, EventOverride } from '../state/SettingsContext';
 import { useNavigate } from 'react-router-dom';
 
 // Hooks
@@ -21,7 +21,8 @@ const Dashboard: React.FC = () => {
   const { accessToken, isAuthenticated, logout } = useAuth();
   const { 
     selectedCalendars, setInitialCalendars, userRole, 
-    soundEnabledBoss, soundEnabledPA, voiceEnabled, voiceURI
+    soundEnabledBoss, soundEnabledPA, voiceEnabled, voiceURI,
+    eventOverrides, updateEventOverrides
   } = useSettings();
   const navigate = useNavigate();
 
@@ -44,143 +45,108 @@ const Dashboard: React.FC = () => {
     handleAuthError
   });
 
-  // Local state to manage overrides (extensions)
-  const [localEvents, setLocalEvents] = useState<DomainEvent[]>([]);
-
-  // Sync local events when initialEvents update
-  // CRITICAL FIX: Ensure pushed start times are preserved AND handled "Ended" events
-  useEffect(() => {
-    setLocalEvents(prevLocal => {
-       if (prevLocal.length === 0) return initialEvents;
-       
-       return initialEvents.map(apiEvent => {
-         const existingLocal = prevLocal.find(e => e.id === apiEvent.id);
-         
-         if (existingLocal) {
-            const apiStart = new Date(apiEvent.startAt).getTime();
-            const apiEnd = new Date(apiEvent.endAt).getTime();
-            const localStart = new Date(existingLocal.startAt).getTime();
-            const localEnd = new Date(existingLocal.endAt).getTime();
-            const now = new Date().getTime();
-
-            // Logic to preserve local overrides:
-            // 1. Extended: Local end is later than API end
-            // 2. Pushed: Local start is later than API start
-            // 3. Ended Manually: Local end is earlier than API end AND it is in the past (expired)
-            const isExtended = localEnd > apiEnd;
-            const isPushed = localStart > apiStart;
-            const isEndedManually = localEnd < apiEnd && localEnd < now;
-
-            if (isExtended || isPushed || isEndedManually) {
-                return { 
-                    ...apiEvent, 
-                    startAt: existingLocal.startAt,
-                    endAt: existingLocal.endAt 
-                };
-            }
+  // 3. Compute Effective Events (Merge API Data with Firebase Overrides)
+  const effectiveEvents = useMemo(() => {
+     return initialEvents.map(evt => {
+         const override = eventOverrides[evt.id];
+         if (override) {
+             return {
+                 ...evt,
+                 startAt: override.startAt || evt.startAt,
+                 endAt: override.endAt || evt.endAt
+             };
          }
-         
-         return apiEvent;
-       });
-    });
-  }, [initialEvents]);
+         return evt;
+     });
+  }, [initialEvents, eventOverrides]);
 
-  // 3. Timing & Clock Hook
-  const { currentTime, remainingTime, isCritical } = useEventTiming(localEvents);
+  // 4. Timing & Clock Hook
+  const { currentTime, remainingTime, isCritical } = useEventTiming(effectiveEvents);
 
-  // 4. Handle Extend Logic (Smart Shift)
+  // 5. Handle Extend Logic (Smart Shift) - SYNCED
   const handleExtendEvent = useCallback((minutes: number) => {
     if (isReadOnly) return;
     const now = new Date().getTime();
     
-    setLocalEvents(prev => {
-      // Find active event (simple check: now is within start and end)
-      // Or if it just ended recently (within last 5 mins) allows extending too
-      const activeIndex = prev.findIndex(e => {
-        const start = new Date(e.startAt).getTime();
-        const end = new Date(e.endAt).getTime();
-        return (now >= start && now < end) || (now >= end && now - end < 5 * 60 * 1000); 
-      });
-
-      if (activeIndex === -1) return prev;
-
-      const newEvents = [...prev];
-      const activeEvent = newEvents[activeIndex];
-      const oldEnd = new Date(activeEvent.endAt).getTime();
-      const shiftAmount = minutes * 60 * 1000;
-      const newEnd = oldEnd + shiftAmount;
-      
-      // Update Active Event
-      newEvents[activeIndex] = { ...activeEvent, endAt: new Date(newEnd).toISOString() };
-
-      // Update subsequent events ONLY if they overlap (Chain Reaction)
-      let currentBoundary = newEnd;
-
-      for (let i = activeIndex + 1; i < newEvents.length; i++) {
-        const currentEvent = newEvents[i];
-        const oldStart = new Date(currentEvent.startAt).getTime();
-        
-        // If the current event starts BEFORE the previous event ends (overlap)
-        // We push it to start at the previous event's end time.
-        if (oldStart < currentBoundary) {
-            const oldEvtEnd = new Date(currentEvent.endAt).getTime();
-            const duration = oldEvtEnd - oldStart;
-            
-            const newStart = currentBoundary;
-            const newEvtEnd = newStart + duration;
-            
-            newEvents[i] = { 
-                ...currentEvent, 
-                startAt: new Date(newStart).toISOString(), 
-                endAt: new Date(newEvtEnd).toISOString() 
-            };
-            
-            // Update boundary for the next iteration
-            currentBoundary = newEvtEnd;
-        } else {
-            // No overlap found, so the chain breaks here. 
-            // Subsequent events are already safe.
-            break;
-        }
-      }
-      return newEvents;
+    // Find active event index in the currently calculated effectiveEvents
+    const activeIndex = effectiveEvents.findIndex(e => {
+      const start = new Date(e.startAt).getTime();
+      const end = new Date(e.endAt).getTime();
+      return (now >= start && now < end) || (now >= end && now - end < 5 * 60 * 1000); 
     });
-  }, [isReadOnly]);
 
-  // 5. Handle Finish Logic (Simple End, No Pull)
+    if (activeIndex === -1) return;
+
+    const updates: Record<string, EventOverride> = {};
+    const activeEvent = effectiveEvents[activeIndex];
+    const oldEnd = new Date(activeEvent.endAt).getTime();
+    const shiftAmount = minutes * 60 * 1000;
+    const newEnd = oldEnd + shiftAmount;
+    
+    // Update Active Event
+    updates[activeEvent.id] = { endAt: new Date(newEnd).toISOString() };
+
+    // Update subsequent events ONLY if they overlap (Chain Reaction)
+    let currentBoundary = newEnd;
+
+    for (let i = activeIndex + 1; i < effectiveEvents.length; i++) {
+      const currentEvent = effectiveEvents[i];
+      const oldStart = new Date(currentEvent.startAt).getTime();
+      
+      // If the current event starts BEFORE the previous event ends (overlap)
+      if (oldStart < currentBoundary) {
+          const oldEvtEnd = new Date(currentEvent.endAt).getTime();
+          const duration = oldEvtEnd - oldStart;
+          
+          const newStart = currentBoundary;
+          const newEvtEnd = newStart + duration;
+          
+          updates[currentEvent.id] = { 
+              startAt: new Date(newStart).toISOString(),
+              endAt: new Date(newEvtEnd).toISOString()
+          };
+          
+          // Update boundary for the next iteration
+          currentBoundary = newEvtEnd;
+      } else {
+          // No overlap found, chain breaks
+          break;
+      }
+    }
+    
+    updateEventOverrides(updates);
+
+  }, [isReadOnly, effectiveEvents, updateEventOverrides]);
+
+  // 6. Handle Finish Logic (Simple End) - SYNCED
   const handleFinishEvent = useCallback(() => {
     if (isReadOnly) return;
     const now = new Date().getTime();
     
-    setLocalEvents(prev => {
-      const activeIndex = prev.findIndex(e => {
-        const start = new Date(e.startAt).getTime();
-        const end = new Date(e.endAt).getTime();
-        return now >= start && now < end;
-      });
-
-      if (activeIndex === -1) return prev;
-
-      const newEvents = [...prev];
-      const activeEvent = newEvents[activeIndex];
-      
-      // End exactly now (minus 1s to ensure status update)
-      const forcedEnd = now - 1000;
-      
-      // Only update the current event. Do NOT touch subsequent events.
-      newEvents[activeIndex] = { ...activeEvent, endAt: new Date(forcedEnd).toISOString() };
-
-      return newEvents;
+    const activeIndex = effectiveEvents.findIndex(e => {
+      const start = new Date(e.startAt).getTime();
+      const end = new Date(e.endAt).getTime();
+      return now >= start && now < end;
     });
-  }, [isReadOnly]);
 
-  // 6. Derived State for UI
-  const ongoingEvent = localEvents.find(e => {
+    if (activeIndex === -1) return;
+
+    const activeEvent = effectiveEvents[activeIndex];
+    // End exactly now (minus 1s to ensure status update)
+    const forcedEnd = now - 1000;
+    
+    updateEventOverrides({
+        [activeEvent.id]: { endAt: new Date(forcedEnd).toISOString() }
+    });
+  }, [isReadOnly, effectiveEvents, updateEventOverrides]);
+
+  // 7. Derived State for UI
+  const ongoingEvent = effectiveEvents.find(e => {
     const now = new Date().getTime();
     return now >= new Date(e.startAt).getTime() && now < new Date(e.endAt).getTime();
   });
   
-  const upcomingEvents = localEvents.filter(e => {
+  const upcomingEvents = effectiveEvents.filter(e => {
     const now = new Date().getTime();
     return new Date(e.startAt).getTime() > now;
   }).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
