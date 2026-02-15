@@ -94,18 +94,39 @@ const Dashboard: React.FC = () => {
       
       newEvents[activeIndex] = { ...activeEvent, endAt: new Date(newEnd).toISOString() };
 
-      for (let i = activeIndex + 1; i < newEvents.length; i++) {
-        const prevEvent = newEvents[i - 1];
-        const currentEvent = newEvents[i];
-        const prevEventEnd = new Date(prevEvent.endAt).getTime();
-        const currentEventStart = new Date(currentEvent.startAt).getTime();
+      // Chain reaction logic
+      let prevEventEnd = newEnd;
 
-        if (prevEventEnd > currentEventStart) {
-          const duration = new Date(currentEvent.endAt).getTime() - currentEventStart;
-          const newStart = prevEventEnd;
+      for (let i = activeIndex + 1; i < newEvents.length; i++) {
+        const currentEvent = newEvents[i];
+        const currentEventStart = new Date(currentEvent.startAt).getTime();
+        const duration = new Date(currentEvent.endAt).getTime() - currentEventStart;
+
+        // Calculate gap between previous event's NEW end and current event's ORIGINAL start
+        const gap = currentEventStart - prevEventEnd;
+
+        // RULE 1: If gap is 5 minutes or more, STOP cascading.
+        // The gap absorbs the delay, so subsequent events stay on time.
+        if (gap >= 5 * 60 * 1000) {
+          break;
+        }
+
+        // RULE 2: If gap is less than 2 minutes (unsafe), PUSH the event.
+        if (gap < 2 * 60 * 1000) {
+          const newStart = prevEventEnd + (2 * 60 * 1000); // Enforce 2 min buffer
           const newEventEnd = newStart + duration;
-          newEvents[i] = { ...currentEvent, startAt: new Date(newStart).toISOString(), endAt: new Date(newEventEnd).toISOString() };
+          
+          newEvents[i] = { 
+            ...currentEvent, 
+            startAt: new Date(newStart).toISOString(), 
+            endAt: new Date(newEventEnd).toISOString() 
+          };
+          
+          // Update prevEventEnd for the next iteration to keep pushing if needed
+          prevEventEnd = newEventEnd;
         } else {
+          // Gap is between 2 and 5 minutes. Safe to keep as is.
+          // Since we didn't push this one, subsequent events maintain their relative schedule.
           break;
         }
       }
@@ -129,27 +150,40 @@ const Dashboard: React.FC = () => {
 
       const newEvents = [...prev];
       const activeEvent = newEvents[activeIndex];
-      const originalScheduledEnd = new Date(activeEvent.endAt).getTime();
+      // End exactly now (minus 1s to ensure status update)
       const forcedEnd = now - 1000;
       
       newEvents[activeIndex] = { ...activeEvent, endAt: new Date(forcedEnd).toISOString() };
 
-      let prevEventNewEnd = forcedEnd + 1000;
-      let prevEventOldEnd = originalScheduledEnd;
+      // Chain reaction logic
+      let prevEventEnd = forcedEnd;
 
       for (let i = activeIndex + 1; i < newEvents.length; i++) {
-         const thisEvent = newEvents[i];
-         const thisOriginalStart = new Date(thisEvent.startAt).getTime();
-         const gap = thisOriginalStart - prevEventOldEnd;
+         const currentEvent = newEvents[i];
+         const currentEventStart = new Date(currentEvent.startAt).getTime();
+         const duration = new Date(currentEvent.endAt).getTime() - currentEventStart;
+         
+         const gap = currentEventStart - prevEventEnd;
 
+         // RULE 1: If gap is 5 minutes or more, STOP cascading.
+         if (gap >= 5 * 60 * 1000) {
+            break;
+         }
+
+         // RULE 2: If gap is less than 2 minutes (unsafe), PUSH the event.
          if (gap < 2 * 60 * 1000) {
-            const duration = new Date(thisEvent.endAt).getTime() - thisOriginalStart;
-            const newStart = prevEventNewEnd; 
+            const newStart = prevEventEnd + (2 * 60 * 1000); // Enforce 2 min buffer
             const newEnd = newStart + duration;
-            newEvents[i] = { ...thisEvent, startAt: new Date(newStart).toISOString(), endAt: new Date(newEnd).toISOString() };
-            prevEventNewEnd = newEnd;
-            prevEventOldEnd = thisOriginalStart + duration; 
+            
+            newEvents[i] = { 
+               ...currentEvent, 
+               startAt: new Date(newStart).toISOString(), 
+               endAt: new Date(newEnd).toISOString() 
+            };
+            
+            prevEventEnd = newEnd;
          } else {
+            // Gap is healthy (2-5 mins), stop chain.
             break;
          }
       }
