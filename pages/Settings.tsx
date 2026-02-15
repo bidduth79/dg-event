@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettings } from '../state/SettingsContext';
 import { useAuth } from '../auth/AuthContext';
 import { APP_CONFIG } from '../core/config/constants';
 import { useNavigate } from 'react-router-dom';
-import { playEndingTone, speakText } from '../core/sound/soundUtils';
+import { playEndingTone, speakText, getProfessionalVoices } from '../core/sound/soundUtils';
 
 const Settings: React.FC = () => {
   const { isAuthenticated, logout } = useAuth();
@@ -12,13 +12,30 @@ const Settings: React.FC = () => {
     setUserRole, userRole,
     soundEnabledBoss, toggleSoundBoss,
     soundEnabledPA, toggleSoundPA,
-    voiceEnabled, toggleVoice
+    voiceEnabled, toggleVoice,
+    voiceURI, setVoiceURI
   } = useSettings();
   const navigate = useNavigate();
 
   // State for Client ID Configuration
   const [clientId, setClientId] = useState(() => localStorage.getItem('google_client_id') || '');
   const [isSaved, setIsSaved] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Load voices on mount
+  useEffect(() => {
+    const loadVoices = () => {
+        const voices = getProfessionalVoices();
+        setAvailableVoices(voices);
+    };
+
+    loadVoices();
+    
+    // Voices load asynchronously in Chrome
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
 
   const handleSaveClientId = () => {
     const trimmed = clientId.trim();
@@ -67,17 +84,34 @@ const Settings: React.FC = () => {
   };
   
   const testVoice = () => {
-     speakText("This is your virtual assistant. System is ready.");
+     speakText("This is your virtual assistant. System is ready.", voiceURI);
+  };
+  
+  const handleVoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setVoiceURI(e.target.value);
   };
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8 bg-white min-h-full">
       
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-normal text-gray-800">Settings</h1>
-        <div className="bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-500 uppercase">
-           Current Mode: <span className="text-blue-600">{userRole === 'pa' ? 'PA Control' : 'Boss View'}</span>
+      <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-4">
+        <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-normal text-gray-800">Settings</h1>
+            <div className="bg-gray-100 px-3 py-1 rounded-full text-xs font-medium text-gray-500 uppercase">
+                {userRole === 'pa' ? 'PA Control' : 'Boss View'}
+            </div>
         </div>
+        
+        {/* CLOSE BUTTON */}
+        <button 
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1 text-gray-500 hover:text-gray-800 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100"
+        >
+            <span className="text-sm font-bold">CLOSE</span>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
       </div>
 
       {/* 1. CONNECTION & AUTH SECTION */}
@@ -185,18 +219,39 @@ const Settings: React.FC = () => {
               </button>
           </div>
 
-          {/* Voice Assistant Toggle */}
-          <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
-             <div>
-               <h3 className="text-sm font-bold text-blue-900">Voice Assistant (Jarvis Mode)</h3>
-               <p className="text-xs text-blue-700">Announce upcoming event names automatically</p>
+          {/* Voice Assistant Configuration */}
+          <div className="col-span-1 md:col-span-2 flex flex-col p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm gap-4">
+             <div className="flex items-center justify-between">
+                <div>
+                   <h3 className="text-sm font-bold text-blue-900">Voice Assistant (Jarvis Mode)</h3>
+                   <p className="text-xs text-blue-700">Announce upcoming event names automatically</p>
+                </div>
+                <button 
+                    onClick={toggleVoice}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${voiceEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                >
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${voiceEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
              </div>
-             <button 
-                onClick={toggleVoice}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${voiceEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
-              >
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${voiceEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
+
+             {/* Voice Model Selector */}
+             {voiceEnabled && (
+                 <div className="mt-2 border-t border-blue-200 pt-3">
+                    <label className="block text-xs font-bold text-blue-800 mb-1">Select Voice Model</label>
+                    <select 
+                        value={voiceURI}
+                        onChange={handleVoiceChange}
+                        className="w-full bg-white border border-blue-300 text-gray-800 text-sm rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                        <option value="">Default System Voice</option>
+                        {availableVoices.map(v => (
+                            <option key={v.voiceURI} value={v.voiceURI}>
+                                {v.name} ({v.lang})
+                            </option>
+                        ))}
+                    </select>
+                 </div>
+             )}
           </div>
           
            {/* Test Sound Button */}

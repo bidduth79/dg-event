@@ -16,6 +16,7 @@ interface SettingsState {
   soundEnabledBoss: boolean;
   soundEnabledPA: boolean;
   voiceEnabled: boolean; // New: Voice Assistant
+  voiceURI: string; // New: Selected Voice Model ID
 }
 
 interface SettingsContextType extends SettingsState {
@@ -30,7 +31,8 @@ interface SettingsContextType extends SettingsState {
   updateFlashMessage: (message: string) => void;
   toggleSoundBoss: () => void;
   toggleSoundPA: () => void;
-  toggleVoice: () => void; // New action
+  toggleVoice: () => void;
+  setVoiceURI: (uri: string) => void; // New Action
 }
 
 const defaultSettings: SettingsState = {
@@ -43,7 +45,8 @@ const defaultSettings: SettingsState = {
   flashMessage: '',
   soundEnabledBoss: true,
   soundEnabledPA: true,
-  voiceEnabled: false, // Default off to avoid startling users
+  voiceEnabled: false, 
+  voiceURI: '', // Default system voice
 };
 
 const STORAGE_KEY = 'app_user_settings';
@@ -69,6 +72,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         soundEnabledBoss: parsed.soundEnabledBoss ?? true,
         soundEnabledPA: parsed.soundEnabledPA ?? true,
         voiceEnabled: parsed.voiceEnabled ?? false,
+        voiceURI: parsed.voiceURI ?? '',
       };
     } catch (error) {
       console.error('Failed to load settings from storage:', error);
@@ -113,6 +117,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const toggleVoice = () => {
     setSettings(prev => ({ ...prev, voiceEnabled: !prev.voiceEnabled }));
+  };
+  
+  const setVoiceURI = (uri: string) => {
+    setSettings(prev => ({ ...prev, voiceURI: uri }));
   };
 
   const setRefreshInterval = (minutes: number) => {
@@ -197,7 +205,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       updateFlashMessage,
       toggleSoundBoss,
       toggleSoundPA,
-      toggleVoice
+      toggleVoice,
+      setVoiceURI
     }}>
       {children}
     </SettingsContext.Provider>

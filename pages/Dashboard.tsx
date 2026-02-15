@@ -21,7 +21,7 @@ const Dashboard: React.FC = () => {
   const { accessToken, isAuthenticated, logout } = useAuth();
   const { 
     selectedCalendars, setInitialCalendars, userRole, 
-    soundEnabledBoss, soundEnabledPA, voiceEnabled
+    soundEnabledBoss, soundEnabledPA, voiceEnabled, voiceURI
   } = useSettings();
   const navigate = useNavigate();
 
@@ -199,11 +199,11 @@ const Dashboard: React.FC = () => {
             // Voice announcement for next event
             if (voiceEnabled && upcomingEvents.length > 0) {
                setTimeout(() => {
-                  speakText(`The next event is ${upcomingEvents[0].title}.`);
+                  speakText(`The next event is ${upcomingEvents[0].title}.`, voiceURI);
                }, 1500); // Delay so it doesn't overlap with the tone
             } else if (voiceEnabled && !ongoingEvent && upcomingEvents.length === 0) {
                setTimeout(() => {
-                  speakText("You have no more events for today.");
+                  speakText("You have no more events for today.", voiceURI);
                }, 1500);
             }
         }
@@ -212,13 +212,13 @@ const Dashboard: React.FC = () => {
     // CASE 2: Event Just Started (Newly detected)
     if (!prevOngoingIdRef.current && ongoingEvent) {
        if (voiceEnabled) {
-          speakText(`Starting now: ${ongoingEvent.title}`);
+          speakText(`Starting now: ${ongoingEvent.title}`, voiceURI);
        }
     }
     
     // Update ref for next render
     prevOngoingIdRef.current = ongoingEvent ? ongoingEvent.id : null;
-  }, [ongoingEvent, userRole, soundEnabledBoss, soundEnabledPA, voiceEnabled, upcomingEvents]);
+  }, [ongoingEvent, userRole, soundEnabledBoss, soundEnabledPA, voiceEnabled, upcomingEvents, voiceURI]);
 
 
   // --- RENDER ---
