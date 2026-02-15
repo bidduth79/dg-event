@@ -19,21 +19,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  
-  // --- MOCK MODE FOR UI DESIGN (Set default to true) ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [user, setUser] = useState<UserProfile | null>({
-    id: 'mock-user-1',
-    email: 'designer@example.com',
-    name: 'UI Designer',
-    picture: '' // Empty will trigger the initial fallback
-  });
-
-  /* 
-  // --- ORIGINAL AUTH LOGIC (COMMENTED OUT FOR UI WORK) ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<UserProfile | null>(null);
 
+  // Check for existing token on mount
   useEffect(() => {
     const token = localStorage.getItem('google_access_token');
     if (token) {
@@ -42,6 +31,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  // Fetch user info when access token changes
   useEffect(() => {
     const fetchUser = async () => {
       if (!accessToken) {
@@ -67,7 +57,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     fetchUser();
   }, [accessToken]);
-  */
 
   const login = (token: string) => {
     localStorage.setItem('google_access_token', token);
@@ -78,14 +67,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = () => {
     localStorage.removeItem('google_access_token');
     setAccessToken(null);
-    // For Mock mode, maybe we don't want to actually logout, or just reload
     setIsAuthenticated(false); 
     setUser(null);
   };
 
   return (
     <AuthContext.Provider value={{
-      accessToken, // Will be null in mock mode
+      accessToken,
       isAuthenticated,
       user,
       login,

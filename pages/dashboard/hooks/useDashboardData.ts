@@ -49,11 +49,13 @@ export const useDashboardData = ({
   
   // --- MOCK DATA GENERATOR ---
   const generateMockData = useCallback(() => {
+    console.log("Generating Mock Data...");
     const mockCals: CalendarInfo[] = [
         { id: '1', summary: 'Personal', backgroundColor: '#4285F4', selected: true },
         { id: '2', summary: 'Work', backgroundColor: '#EA4335', selected: true },
     ];
     setAvailableCalendars(mockCals);
+    // If we are falling back to mock, we might want to ensure mock calendars are selected if nothing is selected
     if (selectedCalendars.length === 0) {
         setInitialCalendars(['1', '2']);
     }
@@ -123,8 +125,9 @@ export const useDashboardData = ({
     // Update Last Synced Time for Mock
     const nowTime = new Date();
     setLastUpdated(nowTime);
-    localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(mockEvents));
-    localStorage.setItem(LAST_UPDATED_KEY, nowTime.toISOString());
+    // Don't save mock data to cache to avoid polluting real data cache if token comes back
+    // localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(mockEvents)); 
+    // localStorage.setItem(LAST_UPDATED_KEY, nowTime.toISOString());
 
   }, [selectedCalendars.length, setInitialCalendars]);
 
@@ -137,13 +140,26 @@ export const useDashboardData = ({
       }
       try {
         const cals = await fetchCalendarList(accessToken);
+        
+        if (cals.length === 0) {
+            console.warn("No calendars found via API. Using Mock Data.");
+            generateMockData();
+            return;
+        }
+
         setAvailableCalendars(cals);
         if (selectedCalendars.length === 0) {
           const primary = cals.find(c => c.selected) || cals[0];
           if (primary) setInitialCalendars([primary.id]);
         }
       } catch (e) {
-        handleAuthError(e);
+        // If Unauthorized, let the app handle logout. Otherwise fallback to mock.
+        if ((e as any).message === "UNAUTHORIZED") {
+             handleAuthError(e);
+        } else {
+             console.warn("Failed to fetch calendars (Network/API Error). Using Mock Data.", e);
+             generateMockData();
+        }
       }
     };
     initCalendars();
@@ -156,11 +172,9 @@ export const useDashboardData = ({
         return;
     }
     if (selectedCalendars.length === 0) {
-        setEvents([]);
-        localStorage.removeItem(EVENTS_CACHE_KEY);
-        localStorage.removeItem(LAST_UPDATED_KEY);
-        setLastUpdated(null);
-        return;
+        // If logged in but no calendars selected, we might be in initial state.
+        // Or user deselected everything.
+        return; 
     }
 
     setLoading(true);
@@ -176,6 +190,13 @@ export const useDashboardData = ({
       const allEvents = results.flat();
       allEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
+      // FALLBACK: If real API returns 0 events, show Mock Data for UI design
+      if (allEvents.length === 0) {
+          console.warn("Real API returned 0 events. Falling back to Mock Data for UI Design.");
+          generateMockData();
+          return;
+      }
+
       setEvents(allEvents);
       
       // Update Timestamp
@@ -187,8 +208,12 @@ export const useDashboardData = ({
       localStorage.setItem(LAST_UPDATED_KEY, now.toISOString());
 
     } catch (err) {
-      console.error("Failed to load events", err);
-      handleAuthError(err);
+      if ((err as any).message === "UNAUTHORIZED") {
+          handleAuthError(err);
+      } else {
+          console.warn("Failed to fetch events (Network/API Error). Falling back to Mock Data.", err);
+          generateMockData();
+      }
     } finally {
       setLoading(false);
     }
