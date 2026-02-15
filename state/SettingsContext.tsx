@@ -126,7 +126,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const toggleVoice = () => {
-    updateFirebase({ voiceEnabled: !syncedSettings.voiceEnabled });
+    // Ensure boolean coercion to avoid type issues
+    const newState = !syncedSettings.voiceEnabled;
+    console.log("Toggling Voice Assistant:", newState);
+    updateFirebase({ voiceEnabled: newState });
   };
   
   const setVoiceURI = (uri: string) => {
@@ -199,11 +202,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   // Combine Synced and Local state for the Consumer
+  // Use explicit defaults fallback to ensure 'voiceEnabled' is never undefined
   const combinedState: SettingsState = {
     ...localSettings,
+    ...defaultSyncedSettings, 
     ...syncedSettings,
     // Convert string date back to Object for app consumption
-    viewDate: new Date(syncedSettings.viewDate), 
+    viewDate: new Date(syncedSettings.viewDate || defaultSyncedSettings.viewDate), 
   };
 
   return (
