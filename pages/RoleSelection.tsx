@@ -15,11 +15,16 @@ const RoleSelection: React.FC = () => {
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 space-y-12 relative overflow-hidden">
        {/* Background Image Layer */}
        <div 
-         className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-1000"
-         style={{ backgroundImage: "url('/bg.jpeg')" }}
+         className="absolute inset-0 z-0"
+         style={{ 
+            backgroundImage: "url('/bg.jpeg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+         }}
        >
-          {/* Dark Overlay to ensure text readability */}
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px]"></div>
+          {/* Reduced opacity (60%) to make the background image visible */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
        </div>
 
        <div className="text-center relative z-10">
@@ -32,7 +37,7 @@ const RoleSelection: React.FC = () => {
           {/* BOSS CARD */}
           <button 
              onClick={() => handleSelect('boss')}
-             className="group relative h-64 bg-gray-900/80 backdrop-blur-md border border-gray-700/50 rounded-2xl flex flex-col items-center justify-center hover:bg-gray-800/90 hover:border-blue-500 transition-all duration-300 active:scale-95 shadow-xl"
+             className="group relative h-64 bg-gray-900/70 backdrop-blur-md border border-gray-700/50 rounded-2xl flex flex-col items-center justify-center hover:bg-gray-800/90 hover:border-blue-500 transition-all duration-300 active:scale-95 shadow-xl"
           >
              <div className="absolute inset-0 bg-blue-900/10 opacity-0 group-hover:opacity-100 rounded-2xl transition-opacity"></div>
              <svg className="w-16 h-16 text-gray-400 group-hover:text-blue-400 mb-4 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -45,7 +50,7 @@ const RoleSelection: React.FC = () => {
           {/* PA CARD */}
           <button 
              onClick={() => handleSelect('pa')}
-             className="group relative h-64 bg-gray-900/80 backdrop-blur-md border border-gray-700/50 rounded-2xl flex flex-col items-center justify-center hover:bg-gray-800/90 hover:border-green-500 transition-all duration-300 active:scale-95 shadow-xl"
+             className="group relative h-64 bg-gray-900/70 backdrop-blur-md border border-gray-700/50 rounded-2xl flex flex-col items-center justify-center hover:bg-gray-800/90 hover:border-green-500 transition-all duration-300 active:scale-95 shadow-xl"
           >
              <div className="absolute inset-0 bg-green-900/10 opacity-0 group-hover:opacity-100 rounded-2xl transition-opacity"></div>
              <svg className="w-16 h-16 text-gray-400 group-hover:text-green-400 mb-4 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
