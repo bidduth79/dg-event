@@ -22,7 +22,7 @@ const Dashboard: React.FC = () => {
   const { 
     selectedCalendars, setInitialCalendars, userRole, 
     soundEnabledBoss, soundEnabledPA, voiceEnabled, voiceURI,
-    eventOverrides, updateEventOverrides
+    eventOverrides, updateEventOverrides, isFirebaseLoaded
   } = useSettings();
   const navigate = useNavigate();
 
@@ -141,10 +141,13 @@ const Dashboard: React.FC = () => {
   }, [isReadOnly, effectiveEvents, updateEventOverrides]);
 
   // 7. Derived State for UI
-  const ongoingEvent = effectiveEvents.find(e => {
+  const rawOngoingEvent = effectiveEvents.find(e => {
     const now = new Date().getTime();
     return now >= new Date(e.startAt).getTime() && now < new Date(e.endAt).getTime();
   });
+  
+  // PREVENT GHOST EVENTS: If Firebase hasn't loaded overrides yet, treat everything as not ongoing to prevent flashing
+  const ongoingEvent = isFirebaseLoaded ? rawOngoingEvent : undefined;
   
   const upcomingEvents = effectiveEvents.filter(e => {
     const now = new Date().getTime();
@@ -153,8 +156,23 @@ const Dashboard: React.FC = () => {
 
   // --- SOUND & VOICE LOGIC ---
   const prevOngoingIdRef = useRef<string | null>(null);
+  // Ref to track if this is the initial load to prevent "Starting Now" voice on refresh
+  const isFirstLoadRef = useRef(true); 
 
   useEffect(() => {
+    // If Firebase isn't ready, don't trigger any sound/logic yet
+    if (!isFirebaseLoaded) return;
+
+    // After first valid check, disable the first-load flag
+    if (isFirstLoadRef.current) {
+        if (ongoingEvent) {
+             // If we load and there is ALREADY an event, we mark it as "seen" so we don't announce it
+             prevOngoingIdRef.current = ongoingEvent.id;
+        }
+        isFirstLoadRef.current = false;
+        return; 
+    }
+
     const shouldPlaySound = (userRole === 'boss' && soundEnabledBoss) || (userRole === 'pa' && soundEnabledPA);
     
     // CASE 1: Event Just Finished
@@ -175,7 +193,7 @@ const Dashboard: React.FC = () => {
         }
     }
     
-    // CASE 2: Event Just Started (Newly detected)
+    // CASE 2: Event Just Started (Newly detected transition)
     if (!prevOngoingIdRef.current && ongoingEvent) {
        if (voiceEnabled) {
           speakText(`Starting now: ${ongoingEvent.title}`, voiceURI);
@@ -184,7 +202,7 @@ const Dashboard: React.FC = () => {
     
     // Update ref for next render
     prevOngoingIdRef.current = ongoingEvent ? ongoingEvent.id : null;
-  }, [ongoingEvent, userRole, soundEnabledBoss, soundEnabledPA, voiceEnabled, upcomingEvents, voiceURI]);
+  }, [ongoingEvent, userRole, soundEnabledBoss, soundEnabledPA, voiceEnabled, upcomingEvents, voiceURI, isFirebaseLoaded]);
 
 
   // --- RENDER ---

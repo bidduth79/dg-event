@@ -44,6 +44,7 @@ interface SettingsContextType extends SettingsState {
   toggleVoice: () => void;
   setVoiceURI: (uri: string) => void;
   updateEventOverrides: (overrides: Record<string, EventOverride>) => void;
+  isFirebaseLoaded: boolean; // Exported to prevent ghost renders
 }
 
 const defaultSyncedSettings = {
@@ -247,7 +248,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       toggleSoundPA,
       toggleVoice,
       setVoiceURI,
-      updateEventOverrides
+      updateEventOverrides,
+      isFirebaseLoaded
     }}>
       {children}
     </SettingsContext.Provider>

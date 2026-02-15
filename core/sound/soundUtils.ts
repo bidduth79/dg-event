@@ -102,11 +102,34 @@ export const getProfessionalVoices = (): SpeechSynthesisVoice[] => {
     });
 };
 
-export const speakText = (text: string, voiceURI?: string) => {
+const waitForVoices = (): Promise<SpeechSynthesisVoice[]> => {
+    return new Promise((resolve) => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            resolve(voices);
+            return;
+        }
+
+        // Voices not loaded yet, wait for event
+        window.speechSynthesis.onvoiceschanged = () => {
+             resolve(window.speechSynthesis.getVoices());
+        };
+        
+        // Fallback timeout in case onvoiceschanged never fires
+        setTimeout(() => {
+             resolve(window.speechSynthesis.getVoices());
+        }, 1000);
+    });
+};
+
+export const speakText = async (text: string, voiceURI?: string) => {
   if (!('speechSynthesis' in window)) return;
 
   // Cancel any ongoing speech
   window.speechSynthesis.cancel();
+  
+  // Ensure voices are loaded before speaking
+  await waitForVoices();
 
   const utterance = new SpeechSynthesisUtterance(text);
   
