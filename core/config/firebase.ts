@@ -4,6 +4,8 @@ import { getDatabase } from "firebase/database";
 const firebaseConfig = {
   apiKey: "AIzaSyBwVaW1Av1w4ulft-vCXL4AKliO2Rg317o",
   authDomain: "event-for-dg.firebaseapp.com",
+  // The databaseURL is required for Realtime Database
+  databaseURL: "https://event-for-dg-default-rtdb.firebaseio.com",
   projectId: "event-for-dg",
   storageBucket: "event-for-dg.firebasestorage.app",
   messagingSenderId: "700124612380",
