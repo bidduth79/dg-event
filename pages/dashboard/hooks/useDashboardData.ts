@@ -116,7 +116,7 @@ export const useDashboardData = ({
 
   }, [selectedCalendars.length, setInitialCalendars]);
 
-  // --- FETCH CALENDAR LIST ---
+  // --- INITIAL LOAD: FETCH CALENDARS ON MOUNT ---
   useEffect(() => {
     const initCalendars = async () => {
       if (!accessToken) {
@@ -134,16 +134,15 @@ export const useDashboardData = ({
 
         setAvailableCalendars(cals);
         
-        // Logic Update: Respect Google's 'selected' state.
-        // If the user has NOT manually configured calendars in the App yet (length 0),
-        // we populate based on what is checked in Google Calendar UI.
+        // Populate initial selection if empty
         if (selectedCalendars.length === 0) {
+          // Strictly respect Google's 'selected' state
           const preSelected = cals.filter(c => c.selected).map(c => c.id);
           
           if (preSelected.length > 0) {
              setInitialCalendars(preSelected);
           } else {
-             // Fallback: If nothing is selected in Google (rare), select primary
+             // Fallback
              const primary = cals.find(c => c.id.includes('group.calendar.google.com') === false) || cals[0];
              if (primary) setInitialCalendars([primary.id]);
           }
@@ -160,23 +159,48 @@ export const useDashboardData = ({
     initCalendars();
   }, [accessToken, handleAuthError, selectedCalendars.length, setInitialCalendars, generateMockData]);
 
-  // --- FETCH EVENTS LOGIC ---
-  const loadEvents = useCallback(async () => {
+  // --- FORCE REFRESH & LOAD LOGIC ---
+  const loadEvents = useCallback(async (isForceRefresh = false) => {
     if (!accessToken) {
         generateMockData();
         return;
     }
-    if (selectedCalendars.length === 0) {
-        return; 
-    }
 
     setLoading(true);
     try {
+      let targetCalendarIds = selectedCalendars;
+
+      // FORCE REFRESH LOGIC:
+      // If manually refreshing, fetch the Calendar List FIRST to see what is currently checked in Google.
+      // This solves the issue where users uncheck 'Holidays' in Google, but the App still shows them.
+      if (isForceRefresh) {
+         try {
+           const freshCalendars = await fetchCalendarList(accessToken);
+           setAvailableCalendars(freshCalendars);
+           
+           // Filter strictly by Google's 'selected' status
+           const activeIds = freshCalendars.filter(c => c.selected).map(c => c.id);
+           
+           if (activeIds.length > 0) {
+             targetCalendarIds = activeIds;
+             // Note: We don't overwrite user's local manual settings in SettingsContext here to avoid confusion,
+             // but we use the fresh Google state for *this* dashboard render.
+           }
+         } catch (e) {
+           console.warn("Could not refresh calendar list, using existing selection", e);
+         }
+      }
+
+      if (targetCalendarIds.length === 0) {
+        setLoading(false);
+        return; 
+      }
+
       const timeMin = startOfDay(new Date()).toISOString();
       const timeMax = addDays(new Date(), 30).toISOString(); 
 
       // Fetch fresh data
-      const promises = selectedCalendars.map(calId => 
+      const promises = targetCalendarIds.map(calId => 
         fetchEventsForCalendar(calId, accessToken, timeMin, timeMax)
       );
 
@@ -184,12 +208,6 @@ export const useDashboardData = ({
       const allEvents = results.flat();
       allEvents.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
 
-      // Only fallback to mock if the API explicitly fails, not just because list is empty.
-      // An empty list is valid (free day).
-      // However, for this UI design phase, if 0 events, we might still want mock, 
-      // BUT for sync debugging, we trust the API result.
-      
-      // If we got a successful empty array, we update state to empty.
       setEvents(allEvents);
       
       const now = new Date();
@@ -203,17 +221,24 @@ export const useDashboardData = ({
           handleAuthError(err);
       } else {
           console.warn("Failed to fetch events (Network/API Error).", err);
-           // Optional: Keep old data or show error
       }
     } finally {
       setLoading(false);
     }
   }, [accessToken, selectedCalendars, handleAuthError, generateMockData]);
 
-  // --- INITIAL LOAD ---
+  // --- INITIAL LOAD EVENTS ---
   useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
+    // Standard load on mount (uses cached settings)
+    if (selectedCalendars.length > 0) {
+      loadEvents(false);
+    }
+  }, [selectedCalendars.length, loadEvents]);
+
+  // Wrapper for manual button click
+  const handleManualRefresh = () => {
+    loadEvents(true); // Pass true to force sync from Google
+  };
 
   // --- LOCAL STATUS UPDATE (5 SECONDS) ---
   useEffect(() => {
@@ -226,5 +251,5 @@ export const useDashboardData = ({
     return () => clearInterval(uiInterval);
   }, []);
 
-  return { events, loading, lastUpdated, refresh: loadEvents };
+  return { events, loading, lastUpdated, refresh: handleManualRefresh };
 };

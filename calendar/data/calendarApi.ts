@@ -2,10 +2,15 @@ import { APP_CONFIG } from '../../core/config/constants';
 import { CalendarInfo } from '../../events/domain/Event';
 
 export const fetchCalendarList = async (accessToken: string): Promise<CalendarInfo[]> => {
+  // Add a random timestamp to prevent browser caching
+  const cacheBuster = new Date().getTime();
+
   try {
-    const response = await fetch(`${APP_CONFIG.API_BASE_URL}/users/me/calendarList?minAccessRole=reader`, {
+    const response = await fetch(`${APP_CONFIG.API_BASE_URL}/users/me/calendarList?minAccessRole=reader&_=${cacheBuster}`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       },
     });
 
