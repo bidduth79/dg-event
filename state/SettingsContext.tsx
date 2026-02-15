@@ -126,9 +126,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const toggleVoice = () => {
-    // Ensure boolean coercion to avoid type issues
-    const newState = !syncedSettings.voiceEnabled;
-    console.log("Toggling Voice Assistant:", newState);
+    // Explicitly cast to boolean to handle any potential undefined/null from partial DB states
+    const currentValue = Boolean(syncedSettings.voiceEnabled);
+    const newState = !currentValue;
     updateFirebase({ voiceEnabled: newState });
   };
   

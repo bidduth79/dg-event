@@ -219,15 +219,15 @@ const Settings: React.FC = () => {
               </button>
           </div>
 
-          {/* Voice Assistant Configuration */}
+          {/* Voice Assistant Configuration - UPDATED FOR BETTER CLICKABILITY */}
           <div className="col-span-1 md:col-span-2 flex flex-col p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm gap-4 transition-all duration-300">
-             <div className="flex items-center justify-between">
+             <div className="flex items-center justify-between cursor-pointer" onClick={toggleVoice}>
                 <div>
                    <h3 className="text-sm font-bold text-blue-900">Voice Assistant (Jarvis Mode)</h3>
                    <p className="text-xs text-blue-700">Announce upcoming event names automatically</p>
                 </div>
                 <button 
-                    onClick={toggleVoice}
+                    onClick={(e) => { e.stopPropagation(); toggleVoice(); }}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none z-10 ${voiceEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
                     title={voiceEnabled ? "Turn Off Voice" : "Turn On Voice"}
                 >
@@ -237,7 +237,7 @@ const Settings: React.FC = () => {
 
              {/* Voice Model Selector */}
              {voiceEnabled && (
-                 <div className="mt-2 border-t border-blue-200 pt-3 animate-fade-in">
+                 <div className="mt-2 border-t border-blue-200 pt-3 animate-fade-in" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-1">
                         <label className="block text-xs font-bold text-blue-800">Select Voice Model</label>
                         <span className="text-[10px] text-blue-600 font-mono">{availableVoices.length} voices found</span>
