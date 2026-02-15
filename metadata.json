@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Expired Blink Focus",
+  "description": "A Google Calendar viewer that highlights expired events with a blinking animation.",
+  "requestFramePermissions": []
+}
