@@ -13,8 +13,12 @@ const Login: React.FC = () => {
     return localStorage.getItem('google_client_id') || '';
   });
 
-  const effectiveClientId = APP_CONFIG.GOOGLE_CLIENT_ID || customClientId;
+  // Trim the ID to prevent space-related errors
+  const effectiveClientId = (APP_CONFIG.GOOGLE_CLIENT_ID || customClientId).trim();
   
+  // Basic validation to check if it looks like a Google Client ID
+  const isValidFormat = effectiveClientId.length === 0 || effectiveClientId.endsWith('.apps.googleusercontent.com');
+
   // Calculate the exact Redirect URI being used
   const currentRedirectUri = window.location.origin + window.location.pathname;
 
@@ -31,8 +35,14 @@ const Login: React.FC = () => {
       return;
     }
     
+    if (!isValidFormat) {
+      const confirm = window.confirm("The Client ID format looks incorrect. It usually ends with '.apps.googleusercontent.com'. Are you sure you want to proceed?");
+      if (!confirm) return;
+    }
+    
+    // Save to local storage if it's a custom input
     if (!APP_CONFIG.GOOGLE_CLIENT_ID && customClientId) {
-      localStorage.setItem('google_client_id', customClientId);
+      localStorage.setItem('google_client_id', effectiveClientId);
     }
     
     const oauth2Endpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -86,12 +96,26 @@ const Login: React.FC = () => {
 
         {/* --- ERROR FIX HELPER SECTION --- */}
         <div className="space-y-4 mb-6">
+           {/* Invalid Client ID Warning */}
+           {!isValidFormat && (
+             <div className="bg-red-900/50 border border-red-500 rounded-lg p-3 animate-pulse">
+                <h3 className="text-xs font-bold text-red-200 uppercase tracking-wide mb-1">
+                  Possible Config Error
+                </h3>
+                <p className="text-xs text-red-100">
+                  Your Client ID does not end with <code>.apps.googleusercontent.com</code>. Double check you didn't copy the "Client Secret" by mistake.
+                </p>
+             </div>
+           )}
+
           <div className="bg-yellow-900/30 border border-yellow-700 rounded-lg p-3">
             <h3 className="text-xs font-bold text-yellow-500 uppercase tracking-wide mb-1">
-              Fix 1: Redirect URI Mismatch (400)
+              Setup Requirements
             </h3>
             <p className="text-xs text-gray-300 mb-2">
-              Add this exact URL to "Authorized redirect URIs" in Google Cloud Console:
+              1. Create Project at <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="underline text-blue-400">Google Cloud Console</a>.<br/>
+              2. Create <strong>OAuth Client ID</strong> (Web Application).<br/>
+              3. Add this URL to <strong>Authorized redirect URIs</strong>:
             </p>
             <div className="flex gap-2">
               <input 
@@ -107,30 +131,24 @@ const Login: React.FC = () => {
               </button>
             </div>
           </div>
-
-          <div className="bg-red-900/30 border border-red-700 rounded-lg p-3">
-            <h3 className="text-xs font-bold text-red-400 uppercase tracking-wide mb-1">
-              Fix 2: Access Blocked (403)
-            </h3>
-            <p className="text-xs text-gray-300">
-              Your app is in <strong>Testing</strong> mode. You <strong>MUST</strong> add your email address to the <strong>"Test users"</strong> list in Google Cloud Console &gt; OAuth consent screen.
-            </p>
-          </div>
         </div>
 
         <div className="space-y-6">
           {!APP_CONFIG.GOOGLE_CLIENT_ID && (
             <div className="bg-blue-900/20 border border-blue-800 p-3 rounded-lg space-y-2">
               <label className="block text-xs font-bold text-blue-300 uppercase tracking-wide">
-                Client ID
+                Google Client ID
               </label>
               <input
                 type="text"
                 value={customClientId}
                 onChange={(e) => setCustomClientId(e.target.value)}
-                placeholder="Paste Google Client ID here..."
-                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:border-blue-500 outline-none"
+                placeholder="e.g., 123...apps.googleusercontent.com"
+                className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
               />
+              <p className="text-[10px] text-gray-400">
+                Paste the ID exactly as shown in Google Cloud Console.
+              </p>
             </div>
           )}
 

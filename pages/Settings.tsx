@@ -22,6 +22,7 @@ const Settings: React.FC = () => {
 
   const handleSaveClientId = () => {
     const trimmed = clientId.trim();
+    setClientId(trimmed); // Update UI with trimmed value
     if (trimmed) {
       localStorage.setItem('google_client_id', trimmed);
     } else {
@@ -32,7 +33,7 @@ const Settings: React.FC = () => {
   };
 
   const handleGoogleLogin = () => {
-    const effectiveClientId = APP_CONFIG.GOOGLE_CLIENT_ID || localStorage.getItem('google_client_id');
+    const effectiveClientId = (APP_CONFIG.GOOGLE_CLIENT_ID || localStorage.getItem('google_client_id') || '').trim();
     
     if (!effectiveClientId) {
       alert("Please save a Google Client ID first.");
@@ -95,7 +96,7 @@ const Settings: React.FC = () => {
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
                 placeholder="Enter Client ID"
-                className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono"
               />
               <button 
                 onClick={handleSaveClientId}
