@@ -64,8 +64,21 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Image Layer */}
+       <div 
+         className="absolute inset-0 z-0"
+         style={{ 
+            backgroundImage: "url('/bg.jpeg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+         }}
+       >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
+       </div>
+
+      <div className="max-w-md w-full bg-gray-900/80 backdrop-blur-md rounded-xl shadow-2xl p-8 border border-gray-700 relative z-10">
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-white mb-2">Expired Blink Focus</h1>
           <p className="text-gray-400">Connect your Google Calendar</p>

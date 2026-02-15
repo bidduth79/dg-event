@@ -55,7 +55,7 @@ const MonthGrid: React.FC<MonthGridProps> = ({ events, viewDate }) => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-black text-gray-300">
+    <div className="flex flex-col h-full bg-transparent text-gray-300">
       {/* Header Days */}
       <div className="grid grid-cols-7 border-b border-gray-800 flex-none">
         {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
@@ -75,7 +75,7 @@ const MonthGrid: React.FC<MonthGridProps> = ({ events, viewDate }) => {
                const dayEvents = getEventsForDay(date);
 
                return (
-                 <div key={dIndex} className={`border-r border-gray-800 relative p-1 overflow-hidden flex flex-col ${!isCurrentMonth ? 'bg-gray-900/40' : 'bg-black'}`}>
+                 <div key={dIndex} className={`border-r border-gray-800 relative p-1 overflow-hidden flex flex-col ${!isCurrentMonth ? 'bg-gray-900/40' : 'bg-transparent'}`}>
                     <div className="text-center mb-1">
                        <span className={`text-xs font-medium inline-block w-6 h-6 leading-6 rounded-full ${isToday ? 'bg-blue-600 text-white' : (isCurrentMonth ? 'text-gray-300' : 'text-gray-600')}`}>
                          {date.getDate()}

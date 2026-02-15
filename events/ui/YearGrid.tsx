@@ -59,7 +59,7 @@ const YearGrid: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-black p-4 text-gray-300">
+    <div className="flex-1 overflow-y-auto bg-transparent p-4 text-gray-300">
        <div className="max-w-6xl mx-auto">
           <div className="text-2xl font-normal text-gray-300 mb-6 border-b border-gray-800 pb-4">
             {year}

@@ -57,7 +57,7 @@ const DayGrid: React.FC<DayGridProps> = ({ events, viewDate }) => {
   const isToday = isSameDay(viewDate, new Date());
 
   return (
-    <div className="flex flex-col h-full bg-black text-gray-300 overflow-hidden">
+    <div className="flex flex-col h-full bg-transparent text-gray-300 overflow-hidden">
       
       {/* 1. Date Header */}
       <div className="flex border-b border-gray-800 flex-none ml-16">
@@ -70,8 +70,8 @@ const DayGrid: React.FC<DayGridProps> = ({ events, viewDate }) => {
       </div>
 
       {/* 2. All Day Section */}
-      <div className="flex border-b border-gray-800 flex-none bg-black z-10 shadow-sm relative">
-         <div className="w-16 flex-shrink-0 border-r border-gray-800 p-2 text-xs text-gray-500 text-right pt-2 bg-black">
+      <div className="flex border-b border-gray-800 flex-none bg-transparent z-10 shadow-sm relative">
+         <div className="w-16 flex-shrink-0 border-r border-gray-800 p-2 text-xs text-gray-500 text-right pt-2 bg-transparent">
             GMT+06
          </div>
          {/* Container for All Day Events */}
@@ -105,7 +105,7 @@ const DayGrid: React.FC<DayGridProps> = ({ events, viewDate }) => {
             {hours.map(hour => (
               <div key={hour} className="flex h-[60px] relative">
                  {/* Time Label */}
-                 <div className="w-16 flex-shrink-0 border-r border-gray-800 text-right pr-2 text-xs text-gray-500 -mt-2.5 bg-black sticky left-0 z-20">
+                 <div className="w-16 flex-shrink-0 border-r border-gray-800 text-right pr-2 text-xs text-gray-500 -mt-2.5 bg-transparent sticky left-0 z-20">
                     {hour === 0 ? '' : <span className="relative -top-1">{hour > 12 ? hour - 12 : hour} {hour >= 12 ? 'PM' : 'AM'}</span>}
                  </div>
                  <div className="flex-1 border-t border-gray-800 relative">

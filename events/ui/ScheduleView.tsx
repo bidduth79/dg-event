@@ -27,14 +27,14 @@ const ScheduleView: React.FC<ScheduleViewProps> = ({ events }) => {
 
   if (dates.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm bg-black h-full">
+      <div className="flex-1 flex items-center justify-center text-gray-500 text-sm bg-transparent h-full">
         No events in this range.
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-black px-4 py-6 text-gray-300">
+    <div className="flex-1 overflow-y-auto bg-transparent px-4 py-6 text-gray-300">
       <div className="max-w-4xl mx-auto space-y-8">
          {dates.map(dateStr => {
             const date = new Date(dateStr);

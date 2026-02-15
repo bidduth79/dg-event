@@ -87,7 +87,7 @@ const WeekGrid: React.FC<WeekGridProps> = ({ events, viewDate, daysToShow = 7 })
   };
 
   return (
-    <div className="flex flex-col h-full bg-black text-gray-300 overflow-hidden">
+    <div className="flex flex-col h-full bg-transparent text-gray-300 overflow-hidden">
       
       {/* HEADER: Days of Week */}
       <div className="flex border-b border-gray-800 flex-none ml-16">
@@ -105,8 +105,8 @@ const WeekGrid: React.FC<WeekGridProps> = ({ events, viewDate, daysToShow = 7 })
       </div>
 
       {/* ALL DAY SECTION */}
-      <div className="flex border-b border-gray-800 flex-none bg-black z-10 shadow-sm relative">
-         <div className="w-16 flex-shrink-0 border-r border-gray-800 p-2 text-xs text-gray-500 text-right pt-3 bg-black">
+      <div className="flex border-b border-gray-800 flex-none bg-transparent z-10 shadow-sm relative">
+         <div className="w-16 flex-shrink-0 border-r border-gray-800 p-2 text-xs text-gray-500 text-right pt-3 bg-transparent">
             GMT+06
          </div>
          
@@ -144,7 +144,7 @@ const WeekGrid: React.FC<WeekGridProps> = ({ events, viewDate, daysToShow = 7 })
          <div className="relative min-h-[1440px]"> 
             {hours.map(hour => (
               <div key={hour} className="flex h-[60px] relative">
-                 <div className="w-16 flex-shrink-0 border-r border-gray-800 text-right pr-2 text-xs text-gray-500 -mt-2 bg-black sticky left-0 z-20">
+                 <div className="w-16 flex-shrink-0 border-r border-gray-800 text-right pr-2 text-xs text-gray-500 -mt-2 bg-transparent sticky left-0 z-20">
                     {hour === 0 ? '' : `${hour > 12 ? hour - 12 : hour} ${hour >= 12 ? 'PM' : 'AM'}`}
                  </div>
                  <div className="flex-1 border-t border-gray-800 relative">

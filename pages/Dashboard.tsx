@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
   // --- RENDER ---
   if (!isAuthenticated) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-black text-white h-full">
+      <div className="flex-1 flex flex-col items-center justify-center h-full">
         <h2 className="text-2xl font-normal text-gray-300 mb-4">Sign in required</h2>
         <button onClick={() => navigate('/settings')} className="bg-blue-600 px-6 py-2 rounded">Connect</button>
       </div>
@@ -215,10 +215,10 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-black text-white font-sans overflow-hidden relative w-full items-center">
+    <div className="flex flex-col h-full font-sans overflow-hidden relative w-full items-center">
       
-      {/* Centered Container */}
-      <div className="w-full max-w-[1440px] h-full flex flex-col shadow-2xl bg-black border-x border-gray-900/50">
+      {/* Centered Container with Semi-Transparent Background */}
+      <div className="w-full max-w-[1440px] h-full flex flex-col shadow-2xl bg-black/80 backdrop-blur-md border-x border-gray-900/50">
           <DashboardHeader 
              currentTime={currentTime} 
              lastUpdated={lastUpdated} 

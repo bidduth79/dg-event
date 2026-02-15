@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { useSettings, ViewMode } from '../state/SettingsContext';
+import { useSettings } from '../state/SettingsContext';
 import { formatDate } from '../core/time/timeUtils';
 
 const Layout: React.FC = () => {
@@ -14,8 +14,21 @@ const Layout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen bg-black text-gray-100 font-sans flex flex-col overflow-hidden relative">
+    <div className="h-screen text-gray-100 font-sans flex flex-col overflow-hidden relative">
       
+      {/* Global Background Image Layer */}
+       <div 
+         className="absolute inset-0 z-0"
+         style={{ 
+            backgroundImage: "url('/bg.jpeg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+         }}
+       >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
+       </div>
+
       {/* Floating Settings Button - ONLY VISIBLE TO PA */}
       {userRole === 'pa' && (
         <Link 
@@ -31,7 +44,7 @@ const Layout: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden relative z-10">
         <Outlet />
       </main>
     </div>
