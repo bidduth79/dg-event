@@ -73,12 +73,14 @@ const Dashboard: React.FC = () => {
   // 3. Timing & Clock Hook
   const { currentTime, remainingTime, isCritical } = useEventTiming(localEvents);
 
-  // 4. Handle Extend Logic (PUSH Logic)
+  // 4. Handle Extend Logic (Unconditional Shift)
   const handleExtendEvent = useCallback((minutes: number) => {
     if (isReadOnly) return;
     const now = new Date().getTime();
     
     setLocalEvents(prev => {
+      // Find active event (simple check: now is within start and end)
+      // Or if it just ended recently (within last 5 mins) allows extending too
       const activeIndex = prev.findIndex(e => {
         const start = new Date(e.startAt).getTime();
         const end = new Date(e.endAt).getTime();
@@ -90,47 +92,32 @@ const Dashboard: React.FC = () => {
       const newEvents = [...prev];
       const activeEvent = newEvents[activeIndex];
       const oldEnd = new Date(activeEvent.endAt).getTime();
-      const newEnd = oldEnd + (minutes * 60 * 1000);
+      const shiftAmount = minutes * 60 * 1000;
+      const newEnd = oldEnd + shiftAmount;
       
+      // Update Active Event
       newEvents[activeIndex] = { ...activeEvent, endAt: new Date(newEnd).toISOString() };
 
-      // Chain reaction logic (PUSH)
-      let prevEventEnd = newEnd;
-
+      // Update ALL subsequent events unconditionally
       for (let i = activeIndex + 1; i < newEvents.length; i++) {
         const currentEvent = newEvents[i];
-        const currentEventStart = new Date(currentEvent.startAt).getTime();
-        const duration = new Date(currentEvent.endAt).getTime() - currentEventStart;
+        const oldStart = new Date(currentEvent.startAt).getTime();
+        const oldEvtEnd = new Date(currentEvent.endAt).getTime();
 
-        // Gap relative to the NEW end of previous event
-        const gap = currentEventStart - prevEventEnd;
+        const newStart = oldStart + shiftAmount;
+        const newEvtEnd = oldEvtEnd + shiftAmount;
 
-        // RULE 1: If gap is 5 minutes or more, STOP cascading.
-        if (gap >= 5 * 60 * 1000) {
-          break;
-        }
-
-        // RULE 2: If gap is less than 2 minutes (unsafe), PUSH the event.
-        if (gap < 2 * 60 * 1000) {
-          const newStart = prevEventEnd + (2 * 60 * 1000); // Enforce 2 min buffer
-          const newEventEnd = newStart + duration;
-          
-          newEvents[i] = { 
+        newEvents[i] = { 
             ...currentEvent, 
             startAt: new Date(newStart).toISOString(), 
-            endAt: new Date(newEventEnd).toISOString() 
-          };
-          
-          prevEventEnd = newEventEnd;
-        } else {
-          break;
-        }
+            endAt: new Date(newEvtEnd).toISOString() 
+        };
       }
       return newEvents;
     });
   }, [isReadOnly]);
 
-  // 5. Handle Finish Logic (PULL Forward Logic)
+  // 5. Handle Finish Logic (Simple End, No Pull)
   const handleFinishEvent = useCallback(() => {
     if (isReadOnly) return;
     const now = new Date().getTime();
@@ -147,50 +134,12 @@ const Dashboard: React.FC = () => {
       const newEvents = [...prev];
       const activeEvent = newEvents[activeIndex];
       
-      // Capture the scheduled end BEFORE we cut it short.
-      // We use this to check if the next event was chained to this schedule.
-      let previousOriginalEnd = new Date(activeEvent.endAt).getTime();
-
-      // 1. End Current Event Immediately
+      // End exactly now (minus 1s to ensure status update)
       const forcedEnd = now - 1000;
+      
+      // Only update the current event. Do NOT touch subsequent events.
       newEvents[activeIndex] = { ...activeEvent, endAt: new Date(forcedEnd).toISOString() };
 
-      // 2. Chain Reaction (PULL)
-      let previousNewEnd = forcedEnd;
-
-      for (let i = activeIndex + 1; i < newEvents.length; i++) {
-         const currentEvent = newEvents[i];
-         const originalStart = new Date(currentEvent.startAt).getTime();
-         const duration = new Date(currentEvent.endAt).getTime() - originalStart;
-         
-         // CHECK RELATIONSHIP: Was this event originally chained?
-         // We look at the gap between its scheduled start and the previous event's scheduled end.
-         const originalGap = originalStart - previousOriginalEnd;
-
-         // RULE: If the original gap was >= 5 minutes, it means they were NOT chained.
-         // Ending early should not affect this distant event.
-         if (originalGap >= 5 * 60 * 1000) {
-            break;
-         }
-
-         // IF CHAINED (Gap < 5m):
-         // We snap this event to follow the NEW end time + 2 minute buffer.
-         // This effectively "Pulls" the event forward if we saved time.
-         const newStart = previousNewEnd + (2 * 60 * 1000);
-         const newEnd = newStart + duration;
-            
-         newEvents[i] = { 
-            ...currentEvent, 
-            startAt: new Date(newStart).toISOString(), 
-            endAt: new Date(newEnd).toISOString() 
-         };
-            
-         // Update pointers for next iteration
-         // The "Original End" for the next loop is the end time of THIS event before we shifted it.
-         previousOriginalEnd = originalStart + duration; 
-         // The "New End" is where we just placed it.
-         previousNewEnd = newEnd;
-      }
       return newEvents;
     });
   }, [isReadOnly]);
