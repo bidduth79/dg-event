@@ -1,22 +1,26 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { addDays } from '../core/time/timeUtils';
+import { db } from '../core/config/firebase';
+import { ref, onValue, set, update } from 'firebase/database';
 
 export type ViewMode = 'day' | 'week' | 'month' | 'year' | 'schedule' | '4days';
 export type UserRole = 'boss' | 'pa' | null;
 
 interface SettingsState {
+  // SYNCED SETTINGS (Shared across devices via Firebase)
   blinkEnabled: boolean;
-  refreshInterval: number; // in minutes
-  selectedCalendars: string[]; // IDs of selected calendars
-  viewDate: Date; // Current date being viewed
+  refreshInterval: number;
+  selectedCalendars: string[];
+  viewDate: Date;
   viewMode: ViewMode;
-  userRole: UserRole;
   flashMessage: string;
-  // Sound Settings
+  voiceEnabled: boolean;
+  voiceURI: string;
+
+  // LOCAL SETTINGS (Device specific, stored in LocalStorage)
+  userRole: UserRole;
   soundEnabledBoss: boolean;
   soundEnabledPA: boolean;
-  voiceEnabled: boolean; // New: Voice Assistant
-  voiceURI: string; // New: Selected Voice Model ID
 }
 
 interface SettingsContextType extends SettingsState {
@@ -32,168 +36,179 @@ interface SettingsContextType extends SettingsState {
   toggleSoundBoss: () => void;
   toggleSoundPA: () => void;
   toggleVoice: () => void;
-  setVoiceURI: (uri: string) => void; // New Action
+  setVoiceURI: (uri: string) => void;
 }
 
-const defaultSettings: SettingsState = {
+const defaultSyncedSettings = {
   blinkEnabled: true,
   refreshInterval: 2,
-  selectedCalendars: [],
-  viewDate: new Date(),
-  viewMode: 'day',
-  userRole: null,
+  selectedCalendars: [] as string[],
+  viewDate: new Date().toISOString(), // Store as string in DB
+  viewMode: 'day' as ViewMode,
   flashMessage: '',
-  soundEnabledBoss: true,
-  soundEnabledPA: true,
-  voiceEnabled: false, 
-  voiceURI: '', // Default system voice
+  voiceEnabled: false,
+  voiceURI: '',
 };
 
-const STORAGE_KEY = 'app_user_settings';
-const FLASH_MSG_KEY = 'app_flash_message_sync';
+const LOCAL_STORAGE_KEY = 'app_local_device_settings';
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize state from LocalStorage or default
-  const [settings, setSettings] = useState<SettingsState>(() => {
+  // 1. LOCAL STATE (Identity & Audio)
+  const [localSettings, setLocalSettings] = useState(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const storedFlash = localStorage.getItem(FLASH_MSG_KEY);
-      
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
       const parsed = stored ? JSON.parse(stored) : {};
-      
       return {
-        ...defaultSettings,
-        ...parsed,
-        viewDate: new Date(),
-        flashMessage: storedFlash || '',
-        // Ensure new settings have defaults if reading from old localstorage
+        userRole: parsed.userRole || null,
         soundEnabledBoss: parsed.soundEnabledBoss ?? true,
         soundEnabledPA: parsed.soundEnabledPA ?? true,
-        voiceEnabled: parsed.voiceEnabled ?? false,
-        voiceURI: parsed.voiceURI ?? '',
       };
-    } catch (error) {
-      console.error('Failed to load settings from storage:', error);
+    } catch {
+      return { userRole: null, soundEnabledBoss: true, soundEnabledPA: true };
     }
-    return defaultSettings;
   });
 
-  // Persist general settings
+  // Save Local Settings on change
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { viewDate, flashMessage, ...settingsToSave } = settings;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
-  }, [settings]);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localSettings));
+  }, [localSettings]);
 
-  // Flash Message Sync
+  // 2. SYNCED STATE (Content & View)
+  // We initialize with defaults, but Firebase will overwrite this instantly on mount
+  const [syncedSettings, setSyncedSettings] = useState(defaultSyncedSettings);
+  const [isFirebaseLoaded, setIsFirebaseLoaded] = useState(false);
+
+  // --- FIREBASE LISTENER ---
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === FLASH_MSG_KEY) {
-        setSettings(prev => ({ ...prev, flashMessage: e.newValue || '' }));
+    const settingsRef = ref(db, 'settings');
+    
+    const unsubscribe = onValue(settingsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setSyncedSettings(prev => ({
+          ...prev,
+          ...data,
+          // Ensure array exists (Firebase doesn't store empty arrays)
+          selectedCalendars: data.selectedCalendars || []
+        }));
+      } else {
+        // If DB is empty, initialize it with defaults
+        set(settingsRef, defaultSyncedSettings);
       }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+      setIsFirebaseLoaded(true);
+    });
+
+    return () => unsubscribe();
   }, []);
 
+  // --- ACTIONS (Write to Firebase for Synced, Write to State for Local) ---
+
+  const updateFirebase = (updates: Partial<typeof defaultSyncedSettings>) => {
+    update(ref(db, 'settings'), updates).catch(err => console.error("Firebase update failed", err));
+  };
+
   const updateFlashMessage = (message: string) => {
-    localStorage.setItem(FLASH_MSG_KEY, message);
-    setSettings(prev => ({ ...prev, flashMessage: message }));
+    updateFirebase({ flashMessage: message });
   };
 
   const toggleBlink = () => {
-    setSettings(prev => ({ ...prev, blinkEnabled: !prev.blinkEnabled }));
+    updateFirebase({ blinkEnabled: !syncedSettings.blinkEnabled });
   };
   
   const toggleSoundBoss = () => {
-    setSettings(prev => ({ ...prev, soundEnabledBoss: !prev.soundEnabledBoss }));
+    setLocalSettings(prev => ({ ...prev, soundEnabledBoss: !prev.soundEnabledBoss }));
   };
 
   const toggleSoundPA = () => {
-    setSettings(prev => ({ ...prev, soundEnabledPA: !prev.soundEnabledPA }));
+    setLocalSettings(prev => ({ ...prev, soundEnabledPA: !prev.soundEnabledPA }));
   };
 
   const toggleVoice = () => {
-    setSettings(prev => ({ ...prev, voiceEnabled: !prev.voiceEnabled }));
+    updateFirebase({ voiceEnabled: !syncedSettings.voiceEnabled });
   };
   
   const setVoiceURI = (uri: string) => {
-    setSettings(prev => ({ ...prev, voiceURI: uri }));
+    updateFirebase({ voiceURI: uri });
   };
 
   const setRefreshInterval = (minutes: number) => {
-    setSettings(prev => ({ ...prev, refreshInterval: minutes }));
+    updateFirebase({ refreshInterval: minutes });
   };
 
   const toggleCalendarSelection = (calendarId: string) => {
-    setSettings(prev => {
-      const isSelected = prev.selectedCalendars.includes(calendarId);
-      const newSelection = isSelected
-        ? prev.selectedCalendars.filter(id => id !== calendarId)
-        : [...prev.selectedCalendars, calendarId];
-      return { ...prev, selectedCalendars: newSelection };
-    });
+    const currentList = syncedSettings.selectedCalendars || [];
+    const newList = currentList.includes(calendarId)
+      ? currentList.filter(id => id !== calendarId)
+      : [...currentList, calendarId];
+    
+    updateFirebase({ selectedCalendars: newList });
   };
 
   const setInitialCalendars = (calendarIds: string[]) => {
-    setSettings(prev => {
-       if (prev.selectedCalendars.length === 0) {
-           return { ...prev, selectedCalendars: calendarIds };
-       }
-       return prev;
-    });
+    // Only set if currently empty (first load)
+    if ((syncedSettings.selectedCalendars || []).length === 0) {
+        updateFirebase({ selectedCalendars: calendarIds });
+    }
   };
 
   const setViewDate = (date: Date) => {
-    setSettings(prev => ({ ...prev, viewDate: date }));
+    updateFirebase({ viewDate: date.toISOString() });
   };
 
   const setViewMode = (mode: ViewMode) => {
-    setSettings(prev => ({ ...prev, viewMode: mode }));
+    updateFirebase({ viewMode: mode });
   };
 
   const navigate = (direction: 'prev' | 'next' | 'today') => {
-    setSettings(prev => {
-      let newDate: Date;
-      if (direction === 'today') {
-        newDate = new Date();
-      } else {
-        const factor = direction === 'next' ? 1 : -1;
-        newDate = new Date(prev.viewDate);
-        switch (prev.viewMode) {
-          case 'day':
-          case 'schedule':
-            newDate = addDays(prev.viewDate, 1 * factor);
-            break;
-          case '4days':
-            newDate = addDays(prev.viewDate, 4 * factor);
-            break;
-          case 'week':
-            newDate = addDays(prev.viewDate, 7 * factor);
-            break;
-          case 'month':
-            newDate.setMonth(newDate.getMonth() + 1 * factor);
-            break;
-          case 'year':
-            newDate.setFullYear(newDate.getFullYear() + 1 * factor);
-            break;
-          default:
-            newDate = addDays(prev.viewDate, 1 * factor);
-        }
+    let newDate: Date;
+    const currentDate = new Date(syncedSettings.viewDate);
+
+    if (direction === 'today') {
+      newDate = new Date();
+    } else {
+      const factor = direction === 'next' ? 1 : -1;
+      newDate = new Date(currentDate);
+      switch (syncedSettings.viewMode) {
+        case 'day':
+        case 'schedule':
+          newDate = addDays(currentDate, 1 * factor);
+          break;
+        case '4days':
+          newDate = addDays(currentDate, 4 * factor);
+          break;
+        case 'week':
+          newDate = addDays(currentDate, 7 * factor);
+          break;
+        case 'month':
+          newDate.setMonth(newDate.getMonth() + 1 * factor);
+          break;
+        case 'year':
+          newDate.setFullYear(newDate.getFullYear() + 1 * factor);
+          break;
+        default:
+          newDate = addDays(currentDate, 1 * factor);
       }
-      return { ...prev, viewDate: newDate };
-    });
+    }
+    updateFirebase({ viewDate: newDate.toISOString() });
   };
 
   const setUserRole = (role: UserRole) => {
-    setSettings(prev => ({ ...prev, userRole: role }));
+    setLocalSettings(prev => ({ ...prev, userRole: role }));
+  };
+
+  // Combine Synced and Local state for the Consumer
+  const combinedState: SettingsState = {
+    ...localSettings,
+    ...syncedSettings,
+    // Convert string date back to Object for app consumption
+    viewDate: new Date(syncedSettings.viewDate), 
   };
 
   return (
     <SettingsContext.Provider value={{
-      ...settings,
+      ...combinedState,
       toggleBlink,
       setRefreshInterval,
       toggleCalendarSelection,
